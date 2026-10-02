@@ -1,21 +1,18 @@
 package com.example.chaturbateclient.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.ListItem
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,8 +25,6 @@ fun SettingsScreen(
     onAutoPlayChange: (Boolean) -> Unit,
     dataSaver: Boolean,
     onDataSaverChange: (Boolean) -> Unit,
-    webmasterId: String,
-    onWebmasterIdChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -42,7 +37,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(18.dp))
         Text("Settings", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text("Playback and API", color = Color(0xFF9A9A9A))
+        Text("Playback", color = Color(0xFF9A9A9A))
         Spacer(Modifier.height(18.dp))
 
         ListItem(
@@ -58,24 +53,6 @@ fun SettingsScreen(
             trailingContent = { Switch(checked = dataSaver, onCheckedChange = onDataSaverChange) }
         )
         HorizontalDivider()
-
-        Spacer(Modifier.height(20.dp))
-        Text("Chaturbate API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "The official online-room feed uses your Chaturbate Webmaster ID. It is stored only on this device.",
-            color = Color(0xFF9A9A9A),
-            style = MaterialTheme.typography.bodySmall
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = webmasterId,
-            onValueChange = onWebmasterIdChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Webmaster ID") },
-            placeholder = { Text("e.g. your affiliate/webmaster ID") }
-        )
 
         Spacer(Modifier.height(20.dp))
         Text("OLED theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

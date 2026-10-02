@@ -150,7 +150,7 @@ private fun ClientApp(viewModel: DiscoveryViewModel = viewModel()) {
                 onDiagnostics = { showDiagnostic = true },
                 modifier = Modifier.padding(padding)
             )
-            1 -> FavoritesScreen(favorites, Modifier.padding(padding))
+            1 -> FavoritesScreen(favorites, onRoomClick = { selectedRoom = it }, modifier = Modifier.padding(padding))
             else -> SettingsScreen(
                 autoPlay = autoPlay,
                 onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
@@ -277,14 +277,14 @@ private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FavoritesScreen(favorites: Set<String>, modifier: Modifier = Modifier) {
+private fun FavoritesScreen(favorites: Set<String>, onRoomClick: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize().background(OledBlack).padding(18.dp)) {
         Text("Favorites", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.size(6.dp))
         Text(if (favorites.isEmpty()) "Rooms you favorite will appear here." else favorites.size.toString() + " saved rooms", color = TextSecondary)
         Spacer(Modifier.size(20.dp))
         favorites.forEach { name ->
-            Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = OledCard), shape = RoundedCornerShape(18.dp)) {
+            Card(Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { onRoomClick(name) }, colors = CardDefaults.cardColors(containerColor = OledCard), shape = RoundedCornerShape(18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Star, null, tint = Accent)
                     Spacer(Modifier.size(12.dp))

@@ -4,54 +4,82 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class ApiRoom(val username: String, val viewers: Int, val category: String, val imageUrl: String)
+data class ApiRoom(
+    val username: String,
+    val viewers: Int,
+    val category: String,
+    val imageUrl: String,
+    val gender: String = "",
+    val location: String = "",
+    val country: String = "",
+    val spokenLanguages: String = "",
+    val tags: List<String> = emptyList()
+)
+
 data class PlaybackSource(val roomStatus: String, val hlsUrl: String?)
 
 object ChaturbateApi {
     private const val BASE = "https://chaturbate.com"
     private const val ROOM_PAGE_LIMIT = 90
-    private val ROOM_GENDERS = listOf("f", "c", "m", "s")
 
-    fun fetchOnlineRooms(limit: Int = 180, query: String? = null): List<ApiRoom> {
-        require(limit > 0) { "Room limit must be positive." }
+    // These are the four gender/category feeds exposed by the current Chaturbate room list.
+    private val ROOM_GENDERS = listOf("f", "m", "c", "s")
 
-        val cleanQuery = query?.trim().orEmpty()
-        if (cleanQuery.isNotEmpty()) {
-            val url = URL(
-                BASE + "/api/ts/roomlist/room-list/" +
-                    "?limit=" + ROOM_PAGE_LIMIT +
-                    "&offset=0" +
-                    "&query=" + encode(cleanQuery)
-            )
-            return parseRooms(JSONObject(request(url))).take(limit)
-        }
-
+    fun fetchOnlineRooms(): List<ApiRoom> {
         val rooms = LinkedHashMap<String, ApiRoom>()
-        var successfulRequests = 0
+        var successfulCategories = 0
 
         for (gender in ROOM_GENDERS) {
             runCatching {
-                val url = URL(
-                    BASE + "/api/ts/roomlist/room-list/" +
-                        "?enable_recommendations=true" +
-                        "&genders=" + encode(gender) +
-                        "&limit=" + ROOM_PAGE_LIMIT +
-                        "&offset=0"
-                )
-                parseRooms(JSONObject(request(url)))
+                fetchAllGenderRooms(gender)
             }.onSuccess { genderRooms ->
-                successfulRequests++
+                successfulCategories++
                 genderRooms.forEach { room ->
                     rooms.putIfAbsent(room.username.lowercase(), room)
                 }
             }
         }
 
-        if (successfulRequests == 0) {
+        if (successfulCategories == 0) {
             throw IllegalStateException("Chaturbate room list requests all failed.")
         }
 
-        return rooms.values.take(limit)
+        return rooms.values.toList()
+    }
+
+    private fun fetchAllGenderRooms(gender: String): List<ApiRoom> {
+        val rooms = ArrayList<ApiRoom>()
+        var offset = 0
+        var totalCount: Int? = null
+
+        while (true) {
+            val url = URL(
+                BASE + "/api/ts/roomlist/room-list/" +
+                    "?enable_recommendations=true" +
+                    "&genders=" + encode(gender) +
+                    "&limit=" + ROOM_PAGE_LIMIT +
+                    "&offset=" + offset
+            )
+
+            val root = JSONObject(request(url))
+            val page = parseRooms(root)
+            if (totalCount == null) {
+                totalCount = root.optInt("total_count", page.size)
+            }
+
+            if (page.isEmpty()) {
+                break
+            }
+
+            rooms.addAll(page)
+            offset += page.size
+
+            if (offset >= (totalCount ?: offset)) {
+                break
+            }
+        }
+
+        return rooms
     }
 
     fun fetchPlaybackSource(username: String): PlaybackSource {
@@ -67,21 +95,48 @@ object ChaturbateApi {
 
     private fun parseRooms(root: JSONObject): List<ApiRoom> {
         val results = root.optJSONArray("rooms") ?: return emptyList()
+
         return buildList {
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue
                 val username = item.optString("username").trim()
                 if (username.isEmpty()) continue
 
+                val gender = item.optString("gender").trim()
+                val subject = item.optString("room_subject").trim()
+                val location = item.optString("location").trim()
+                val country = item.optString("country").trim()
+                val spokenLanguages = item.optString("spoken_languages").trim()
+                val tags = parseTags(item)
+
                 add(
                     ApiRoom(
                         username = username,
-                        viewers = item.optInt("num_users", item.optInt("num_viewers", 0)),
-                        category = item.optString("room_subject")
-                            .ifBlank { item.optString("gender").ifBlank { "Live" } },
-                        imageUrl = item.optString("image_url")
+                        viewers = item.optInt(
+                            "num_users",
+                            item.optInt("num_viewers", 0)
+                        ),
+                        category = subject.ifBlank {
+                            gender.ifBlank { "Live" }
+                        },
+                        imageUrl = item.optString("image_url"),
+                        gender = gender,
+                        location = location,
+                        country = country,
+                        spokenLanguages = spokenLanguages,
+                        tags = tags
                     )
                 )
+            }
+        }
+    }
+
+    private fun parseTags(item: JSONObject): List<String> {
+        val array = item.optJSONArray("tags") ?: return emptyList()
+        return buildList {
+            for (i in 0 until array.length()) {
+                val tag = array.optString(i).trim()
+                if (tag.isNotEmpty()) add(tag)
             }
         }
     }
@@ -95,11 +150,13 @@ object ChaturbateApi {
             setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
             setRequestProperty("Referer", BASE + "/")
         }
+
         try {
             val code = connection.responseCode
             if (code !in 200..299) {
                 throw IllegalStateException("Chaturbate API returned HTTP " + code)
             }
+
             return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()

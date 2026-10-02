@@ -40,7 +40,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,10 +50,13 @@ import com.example.chaturbateclient.data.AppPreferences
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.data.Room
 
-private val OledBlack = Color.Black\nprivate val OledCard = Color(0xFF0A0A0A)\nprivate val OledElevated = Color(0xFF111111)
+private val OledBlack = Color.Black
+private val OledCard = Color(0xFF0A0A0A)
+private val OledElevated = Color(0xFF111111)
 private val OledSurface = Color(0xFF080808)
 private val TextPrimary = Color(0xFFF5F5F5)
-private val TextSecondary = Color(0xFF9A9A9A)\nprivate val Accent = Color(0xFFD8B4FE)
+private val TextSecondary = Color(0xFF9A9A9A)
+private val Accent = Color(0xFFD8B4FE)
 
 private val demoRooms = listOf(
     Room("Room preview", 0, "API pending"),
@@ -89,7 +91,13 @@ private fun ClientTheme(content: @Composable () -> Unit) {
 @Composable
 private fun ClientApp() {
     var selectedTab by remember { mutableStateOf(0) }
-    var query by remember { mutableStateOf("") }\n    var selectedRoom by remember { mutableStateOf<Room?>(null) }\n    val context = LocalContext.current\n    val preferences = remember(context) { AppPreferences(context) }\n    var favorites by remember { mutableStateOf(preferences.loadFavorites()) }\n    var autoPlay by remember { mutableStateOf(preferences.autoPlay) }\n    var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
+    var query by remember { mutableStateOf("") }
+    var selectedRoom by remember { mutableStateOf<Room?>(null) }
+    val context = LocalContext.current
+    val preferences = remember(context) { AppPreferences(context) }
+    var favorites by remember { mutableStateOf(preferences.loadFavorites()) }
+    var autoPlay by remember { mutableStateOf(preferences.autoPlay) }
+    var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
 
     Scaffold(
         containerColor = OledBlack,
@@ -119,10 +127,27 @@ private fun ClientApp() {
             }
         }
     ) { padding ->
-        if (selectedRoom != null) {\n            com.example.chaturbateclient.ui.player.PlayerScreen(\n                username = selectedRoom!!.username,\n                onBack = { selectedRoom = null },\n                isFavorite = favorites.contains(selectedRoom!!.username),\n                onFavorite = {\n                    val name = selectedRoom!!.username\n                    favorites = if (favorites.contains(name)) favorites - name else favorites + name\n                    preferences.saveFavorites(favorites)\n                }\n            )\n        } else when (selectedTab) {
+        if (selectedRoom != null) {
+            com.example.chaturbateclient.ui.player.PlayerScreen(
+                username = selectedRoom!!.username,
+                onBack = { selectedRoom = null },
+                isFavorite = favorites.contains(selectedRoom!!.username),
+                onFavorite = {
+                    val name = selectedRoom!!.username
+                    favorites = if (favorites.contains(name)) favorites - name else favorites + name
+                    preferences.saveFavorites(favorites)
+                }
+            )
+        } else when (selectedTab) {
             0 -> HomeScreen(query, { query = it }, Modifier.padding(padding)) { selectedRoom = it }
             1 -> FavoritesScreen(favorites, Modifier.padding(padding))
-            else -> SettingsScreen(\n                autoPlay = autoPlay,\n                onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },\n                dataSaver = dataSaver,\n                onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },\n                modifier = Modifier.padding(padding)\n            )
+            else -> SettingsScreen(
+                autoPlay = autoPlay,
+                onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
+                dataSaver = dataSaver,
+                onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
+                modifier = Modifier.padding(padding)
+            )
         }
     }
 }
@@ -226,7 +251,8 @@ private fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
         )
     }
 }
-\n@Composable
+
+@Composable
 private fun FavoritesScreen(
     favorites: Set<String>,
     modifier: Modifier = Modifier

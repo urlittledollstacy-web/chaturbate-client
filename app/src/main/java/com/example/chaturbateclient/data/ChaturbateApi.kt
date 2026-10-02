@@ -12,8 +12,19 @@ object ChaturbateApi {
     private const val ROOM_PAGE_LIMIT = 90
     private val ROOM_GENDERS = listOf("f", "c", "m", "s")
 
-    fun fetchOnlineRooms(limit: Int = 180): List<ApiRoom> {
+    fun fetchOnlineRooms(limit: Int = 180, query: String? = null): List<ApiRoom> {
         require(limit > 0) { "Room limit must be positive." }
+
+        val cleanQuery = query?.trim().orEmpty()
+        if (cleanQuery.isNotEmpty()) {
+            val url = URL(
+                BASE + "/api/ts/roomlist/room-list/" +
+                    "?limit=" + ROOM_PAGE_LIMIT +
+                    "&offset=0" +
+                    "&query=" + encode(cleanQuery)
+            )
+            return parseRooms(JSONObject(request(url))).take(limit)
+        }
 
         val rooms = LinkedHashMap<String, ApiRoom>()
         var successfulRequests = 0

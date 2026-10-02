@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ListItem
@@ -25,15 +28,21 @@ fun SettingsScreen(
     onAutoPlayChange: (Boolean) -> Unit,
     dataSaver: Boolean,
     onDataSaverChange: (Boolean) -> Unit,
+    webmasterId: String,
+    onWebmasterIdChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxSize().background(Color.Black).padding(horizontal = 18.dp)
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp)
     ) {
         Spacer(Modifier.height(18.dp))
         Text("Settings", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Text("Playback and display", color = Color(0xFF9A9A9A))
+        Text("Playback and API", color = Color(0xFF9A9A9A))
         Spacer(Modifier.height(18.dp))
 
         ListItem(
@@ -51,8 +60,27 @@ fun SettingsScreen(
         HorizontalDivider()
 
         Spacer(Modifier.height(20.dp))
+        Text("Chaturbate API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "The official online-room feed uses your Chaturbate Webmaster ID. It is stored only on this device.",
+            color = Color(0xFF9A9A9A),
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = webmasterId,
+            onValueChange = onWebmasterIdChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Webmaster ID") },
+            placeholder = { Text("e.g. your affiliate/webmaster ID") }
+        )
+
+        Spacer(Modifier.height(20.dp))
         Text("OLED theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text("Pure black is always enabled for OLED displays.", color = Color(0xFF9A9A9A))
+        Spacer(Modifier.height(24.dp))
     }
 }

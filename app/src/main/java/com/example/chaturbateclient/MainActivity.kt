@@ -44,10 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-private val OledBlack = Color.Black
+private val OledBlack = Color.Black\nprivate val OledCard = Color(0xFF0A0A0A)\nprivate val OledElevated = Color(0xFF111111)
 private val OledSurface = Color(0xFF080808)
 private val TextPrimary = Color(0xFFF5F5F5)
-private val TextSecondary = Color(0xFF9E9E9E)
+private val TextSecondary = Color(0xFF9A9A9A)\nprivate val Accent = Color(0xFFD8B4FE)
 
 data class Room(
     val username: String,
@@ -140,7 +140,7 @@ private fun HomeScreen(
     ) {
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Live",
+            text = "Discover",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -167,7 +167,7 @@ private fun HomeScreen(
 
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Discovery API integration will live here.",
+            text = "Live rooms",
             color = TextSecondary
         )
         Spacer(Modifier.height(8.dp))
@@ -182,7 +182,7 @@ private fun HomeScreen(
 private fun RoomCard(room: Room) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { },
-        colors = CardDefaults.cardColors(containerColor = OledSurface)
+        colors = CardDefaults.cardColors(containerColor = OledCard)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -191,7 +191,7 @@ private fun RoomCard(room: Room) {
             Surface(
                 modifier = Modifier.size(58.dp),
                 color = Color(0xFF151515),
-                shape = MaterialTheme.shapes.medium
+                shape = RoundedCornerShape(16.dp)
             ) {}
 
             Spacer(Modifier.size(12.dp))

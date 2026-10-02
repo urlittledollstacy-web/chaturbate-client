@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.chaturbateclient.data.ApiRoom
+import com.example.chaturbateclient.data.DiscoveryScope
 import com.example.chaturbateclient.data.AppPreferences
 import com.example.chaturbateclient.data.DiscoveryViewModel
 import com.example.chaturbateclient.data.scope

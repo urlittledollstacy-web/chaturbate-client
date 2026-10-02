@@ -101,21 +101,38 @@ private fun ClientApp() {
 
     LaunchedEffect(selectedTab, refreshNonce) {
         if (selectedTab == 0) {
-            loadingRooms = true
-            roomError = null
+            val cached = preferences.loadRoomCache()
+            if (cached.isNotEmpty()) {
+                rooms = cached
+                loadingRooms = false
+            } else {
+                loadingRooms = true
+                roomError = null
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        ChaturbateApi.fetchInitialRooms()
+                    }
+                }.onSuccess {
+                    rooms = it
+                    preferences.saveRoomCache(it)
+                    loadingRooms = false
+                }.onFailure {
+                    roomError = it.message ?: "Unable to load live rooms."
+                    loadingRooms = false
+                }
+            }
+
             runCatching {
                 withContext(Dispatchers.IO) {
-                    ChaturbateApi.fetchOnlineRooms()
+                    ChaturbateApi.fetchAllOnlineRooms()
                 }
             }.onSuccess {
                 rooms = it
-                if (it.isEmpty()) {
-                    roomError = "No live rooms returned."
-                }
+                preferences.saveRoomCache(it)
+                if (it.isEmpty()) roomError = "No live rooms returned."
             }.onFailure {
-                roomError = it.message ?: "Unable to load live rooms."
+                if (rooms.isEmpty()) roomError = it.message ?: "Unable to refresh live rooms."
             }
-            loadingRooms = false
         }
     }
 

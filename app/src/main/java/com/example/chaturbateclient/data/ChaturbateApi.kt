@@ -13,7 +13,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import kotlin.math.min
 
 data class ApiRoom(
     val username: String,
@@ -87,6 +86,7 @@ object ChaturbateApi {
     suspend fun fetchCompleteCatalog(): CatalogFetchResult = withContext(Dispatchers.IO) {
         val results = mutableListOf<FeedPage>()
         var failures = 0
+        var budgetExceeded = false
 
         for (gender in ROOM_GENDERS) {
             ensureActive()
@@ -97,13 +97,23 @@ object ChaturbateApi {
             } catch (_: Exception) {
                 failures++
                 null
-            } ?: continue
+            }
+
+            if (first == null) {
+                continue
+            }
 
             results += first
-            val total = first.totalCount ?: run {
+            val total = first.totalCount
+            if (total == null) {
                 failures++
                 continue
             }
+
+            if (total > ROOM_PAGE_LIMIT * MAX_PAGES_PER_FEED) {
+                budgetExceeded = true
+            }
+
             val offsets = pageOffsets(total, ROOM_PAGE_LIMIT, MAX_PAGES_PER_FEED)
             val pageCount = offsets.size
             if (pageCount <= 1) continue
@@ -126,7 +136,10 @@ object ChaturbateApi {
 
         val rooms = results.flatMap { it.rooms }.deduplicate().take(MAX_TOTAL_ROOMS)
         val successfulFeeds = results.map { it.gender }.toSet().size
-        val complete = failures == 0 && !budgetExceeded && successfulFeeds == ROOM_GENDERS.size && rooms.size < MAX_TOTAL_ROOMS
+        val complete = failures == 0 &&
+            !budgetExceeded &&
+            successfulFeeds == ROOM_GENDERS.size &&
+            rooms.size < MAX_TOTAL_ROOMS
         val diagnostic = lastDiagnostic
 
         CatalogFetchResult(

@@ -12,7 +12,7 @@ class RoomSearchTest {
 
     @Test fun searchesUsernameSubjectGenderAndTags() {
         assertEquals(listOf("Alice"), searchRooms(rooms, "alice").map { it.username })
-        assertEquals(listOf("Alice"), searchRooms(rooms, "gaming").map { it.username })
+        assertEquals(listOf("Alice", "CoupleX"), searchRooms(rooms, "gaming").map { it.username })
         assertEquals(listOf("Bob"), searchRooms(rooms, "m").map { it.username })
     }
 

@@ -3,6 +3,11 @@ package com.example.chaturbateclient.data
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+
 
 data class ApiRoom(
     val username: String,
@@ -25,61 +30,72 @@ object ChaturbateApi {
     // These are the four gender/category feeds exposed by the current Chaturbate room list.
     private val ROOM_GENDERS = listOf("f", "m", "c", "s")
 
-    fun fetchOnlineRooms(): List<ApiRoom> {
-        val rooms = LinkedHashMap<String, ApiRoom>()
-        var successfulCategories = 0
-
-        for (gender in ROOM_GENDERS) {
-            runCatching {
-                fetchAllGenderRooms(gender)
-            }.onSuccess { genderRooms ->
-                successfulCategories++
-                genderRooms.forEach { room ->
-                    rooms.putIfAbsent(room.username.lowercase(), room)
-                }
-            }
-        }
-
-        if (successfulCategories == 0) {
-            throw IllegalStateException("Chaturbate room list requests all failed.")
-        }
-
-        return rooms.values.toList()
+    suspend fun fetchInitialRooms(): List<ApiRoom> = coroutineScope {
+        ROOM_GENDERS.map { gender ->
+            async(Dispatchers.IO) { fetchGenderPage(gender, 0) }
+        }.awaitAll().flatten().deduplicate()
     }
 
-    private fun fetchAllGenderRooms(gender: String): List<ApiRoom> {
-        val rooms = ArrayList<ApiRoom>()
-        var offset = 0
-        var totalCount: Int? = null
+    suspend fun fetchAllOnlineRooms(): List<ApiRoom> = coroutineScope {
+        val firstPages = ROOM_GENDERS.map { gender ->
+            async(Dispatchers.IO) { fetchGenderPageWithCount(gender) }
+        }.awaitAll()
 
-        while (true) {
-            val url = URL(
-                BASE + "/api/ts/roomlist/room-list/" +
-                    "?enable_recommendations=true" +
-                    "&genders=" + encode(gender) +
-                    "&limit=" + ROOM_PAGE_LIMIT +
-                    "&offset=" + offset
-            )
+        firstPages.map { page ->
+            async(Dispatchers.IO) { fetchRemainingPages(page.gender, page.totalCount, page.rooms) }
+        }.awaitAll().flatten().deduplicate()
+    }
 
-            val root = JSONObject(request(url))
-            val page = parseRooms(root)
-            if (totalCount == null) {
-                totalCount = root.optInt("total_count", page.size)
-            }
+    private fun fetchGenderPage(gender: String, page: Int): List<ApiRoom> {
+        val offset = page * ROOM_PAGE_LIMIT
+        val url = roomListUrl(gender, offset)
+        return parseRooms(JSONObject(request(url)))
+    }
 
-            if (page.isEmpty()) {
-                break
-            }
+    private data class GenderPage(
+        val gender: String,
+        val totalCount: Int,
+        val rooms: List<ApiRoom>
+    )
 
-            rooms.addAll(page)
-            offset += page.size
+    private fun fetchGenderPageWithCount(gender: String): GenderPage {
+        val url = roomListUrl(gender, 0)
+        val root = JSONObject(request(url))
+        return GenderPage(
+            gender = gender,
+            totalCount = root.optInt("total_count", 0),
+            rooms = parseRooms(root)
+        )
+    }
 
-            if (offset >= (totalCount ?: offset)) {
-                break
-            }
-        }
+    private suspend fun fetchRemainingPages(
+        gender: String,
+        totalCount: Int,
+        firstPage: List<ApiRoom>
+    ): List<ApiRoom> = coroutineScope {
+        if (totalCount <= firstPage.size) return@coroutineScope firstPage
 
-        return rooms
+        val pageCount = (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT
+        val remaining = (1 until pageCount).map { page ->
+            async(Dispatchers.IO) { fetchGenderPage(gender, page) }
+        }.awaitAll().flatten()
+
+        firstPage + remaining
+    }
+
+    private fun roomListUrl(gender: String, offset: Int): URL =
+        URL(
+            BASE + "/api/ts/roomlist/room-list/" +
+                "?enable_recommendations=true" +
+                "&genders=" + encode(gender) +
+                "&limit=" + ROOM_PAGE_LIMIT +
+                "&offset=" + offset
+        )
+
+    private fun List<ApiRoom>.deduplicate(): List<ApiRoom> {
+        val unique = LinkedHashMap<String, ApiRoom>()
+        forEach { unique.putIfAbsent(it.username.lowercase(), it) }
+        return unique.values.toList()
     }
 
     fun fetchPlaybackSource(username: String): PlaybackSource {

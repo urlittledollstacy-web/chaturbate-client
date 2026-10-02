@@ -22,6 +22,8 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -38,11 +40,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.chaturbateclient.data.DemoRoomRepository
+import com.example.chaturbateclient.data.Room
 
 private val OledBlack = Color.Black\nprivate val OledCard = Color(0xFF0A0A0A)\nprivate val OledElevated = Color(0xFF111111)
 private val OledSurface = Color(0xFF080808)
@@ -88,7 +93,7 @@ private fun ClientTheme(content: @Composable () -> Unit) {
 @Composable
 private fun ClientApp() {
     var selectedTab by remember { mutableStateOf(0) }
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }\n    var selectedRoom by remember { mutableStateOf<Room?>(null) }\n    var favorites by remember { mutableStateOf(setOf<String>()) }
 
     Scaffold(
         containerColor = OledBlack,
@@ -118,9 +123,9 @@ private fun ClientApp() {
             }
         }
     ) { padding ->
-        when (selectedTab) {
-            0 -> HomeScreen(query, { query = it }, Modifier.padding(padding))
-            1 -> PlaceholderScreen("Favorites", Modifier.padding(padding))
+        if (selectedRoom != null) {\n            com.example.chaturbateclient.ui.player.PlayerScreen(\n                username = selectedRoom!!.username,\n                onBack = { selectedRoom = null },\n                isFavorite = favorites.contains(selectedRoom!!.username),\n                onFavorite = {\n                    val name = selectedRoom!!.username\n                    favorites = if (favorites.contains(name)) favorites - name else favorites + name\n                }\n            )\n        } else when (selectedTab) {
+            0 -> HomeScreen(query, { query = it }, Modifier.padding(padding)) { selectedRoom = it }
+            1 -> FavoritesScreen(favorites, Modifier.padding(padding))
             else -> PlaceholderScreen("Settings", Modifier.padding(padding))
         }
     }
@@ -173,15 +178,15 @@ private fun HomeScreen(
         Spacer(Modifier.height(8.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(demoRooms) { room -> RoomCard(room) }
+            items(demoRooms.filter { query.isBlank() || it.username.contains(query, ignoreCase = true) }) { room -> RoomCard(room, onClick = { onRoomClick(room) }) }
         }
     }
 }
 
 @Composable
-private fun RoomCard(room: Room) {
+private fun RoomCard(room: Room, onClick: () -> Unit = {}) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = OledCard)
     ) {
         Row(
@@ -222,5 +227,39 @@ private fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
             "This section is part of the initial client scaffold.",
             color = TextSecondary
         )
+    }
+}
+\n@Composable
+private fun FavoritesScreen(
+    favorites: Set<String>,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxSize().background(OledBlack).padding(18.dp)
+    ) {
+        Text("Favorites", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (favorites.isEmpty()) "Rooms you favorite will appear here."
+            else favorites.size.toString() + " saved rooms",
+            color = TextSecondary
+        )
+        Spacer(Modifier.height(20.dp))
+        favorites.forEach { name ->
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                colors = CardDefaults.cardColors(containerColor = OledCard),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Star, contentDescription = null, tint = Accent)
+                    Spacer(Modifier.size(12.dp))
+                    Text(name, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
     }
 }

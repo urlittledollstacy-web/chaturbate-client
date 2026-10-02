@@ -55,7 +55,7 @@ import com.example.chaturbateclient.player.VideoQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@OptIn(UnstableApi::class)
+@UnstableApi
 @Composable
 fun PlayerScreen(
     username: String,

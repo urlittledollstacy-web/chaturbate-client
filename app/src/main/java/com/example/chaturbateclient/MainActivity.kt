@@ -56,6 +56,7 @@ import coil.compose.AsyncImage
 import com.example.chaturbateclient.data.ApiRoom
 import com.example.chaturbateclient.data.AppPreferences
 import com.example.chaturbateclient.data.DiscoveryViewModel
+import com.example.chaturbateclient.data.scope
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 
@@ -203,8 +204,13 @@ private fun HomeScreen(
             IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh") }
         }
         Text(
-            if (partial) "Live catalogue • coverage is partial" else "Live catalogue",
+            if (partial) "Live catalogue • coverage is partial" else "Live catalogue • best-effort coverage",
             color = if (partial) Color(0xFFFFCC80) else TextSecondary
+        )
+        Text(
+            "Search scope: ${DiscoveryScope.LOADED_LIVE_ROOMS.label}. Global profile/offline search is not available.",
+            color = TextSecondary,
+            style = MaterialTheme.typography.bodySmall
         )
         Spacer(Modifier.size(12.dp))
         TextField(
@@ -242,7 +248,11 @@ private fun HomeScreen(
         }
         when {
             loading && rooms.isEmpty() -> CircularProgressIndicator(Modifier.padding(20.dp))
-            rooms.isEmpty() -> Text("No live rooms are currently loaded.", color = TextSecondary, modifier = Modifier.padding(12.dp))
+            rooms.isEmpty() -> Text(
+                if (query.isBlank()) "No live rooms are currently loaded." else "No loaded live room matches this search. This does not mean the profile is offline or nonexistent.",
+                color = TextSecondary,
+                modifier = Modifier.padding(12.dp)
+            )
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(rooms, key = { it.username.lowercase() }) { room -> RoomCard(room) { onRoomClick(room) } }
             }

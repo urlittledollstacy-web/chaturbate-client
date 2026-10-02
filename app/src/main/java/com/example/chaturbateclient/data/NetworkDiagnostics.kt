@@ -14,7 +14,7 @@ data class NetworkDiagnostic(
     fun safeSummary(): String = buildString {
         append(operation)
         append(" — ")
-        append(status?.toString() ?: "transport error")
+        append(status?.let { "HTTP $it" } ?: "transport error")
         append("\n")
         append(url)
         contentType?.let { append("\nContent-Type: ").append(it) }

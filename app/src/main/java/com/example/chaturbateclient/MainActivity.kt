@@ -94,27 +94,17 @@ private fun ClientApp() {
     var favorites by remember { mutableStateOf(preferences.loadFavorites()) }
     var autoPlay by remember { mutableStateOf(preferences.autoPlay) }
     var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
-    var webmasterId by remember { mutableStateOf(preferences.webmasterId) }
     var rooms by remember { mutableStateOf<List<ApiRoom>>(emptyList()) }
     var loadingRooms by remember { mutableStateOf(false) }
     var roomError by remember { mutableStateOf<String?>(null) }
+    var refreshNonce by remember { mutableStateOf(0) }
 
-    fun refreshRooms() {
-        if (webmasterId.isBlank()) {
-            rooms = emptyList()
-            roomError = "Add your Webmaster ID in Settings to load live rooms."
-            return
-        }
-        loadingRooms = true
-        roomError = null
-    }
-
-    LaunchedEffect(webmasterId, selectedTab) {
-        if (selectedTab != 2 && webmasterId.isNotBlank()) {
+    LaunchedEffect(selectedTab, refreshNonce) {
+        if (selectedTab == 0) {
             loadingRooms = true
             roomError = null
             runCatching {
-                withContext(Dispatchers.IO) { ChaturbateApi.fetchOnlineRooms(webmasterId) }
+                withContext(Dispatchers.IO) { ChaturbateApi.fetchOnlineRooms() }
             }.onSuccess {
                 rooms = it
                 if (it.isEmpty()) roomError = "No live rooms returned."
@@ -155,7 +145,7 @@ private fun ClientApp() {
                 onQueryChange = { query = it },
                 modifier = Modifier.padding(padding),
                 onRoomClick = { selectedRoom = Room(it.username, it.viewers, it.category, true) },
-                onRetry = { refreshRooms() }
+                onRetry = { refreshNonce++ }
             )
             1 -> FavoritesScreen(favorites, Modifier.padding(padding))
             else -> SettingsScreen(
@@ -163,11 +153,6 @@ private fun ClientApp() {
                 onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
                 dataSaver = dataSaver,
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
-                webmasterId = webmasterId,
-                onWebmasterIdChange = {
-                    webmasterId = it
-                    preferences.webmasterId = it
-                },
                 modifier = Modifier.padding(padding)
             )
         }
@@ -222,7 +207,7 @@ private fun HomeScreen(
             error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(12.dp)) {
                 Text(error, color = TextSecondary)
                 Spacer(Modifier.height(8.dp))
-                Text("Open Settings to configure the API.", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
+                Text("Tap to retry", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
             }
             filtered.isEmpty() -> Text("No rooms match your search.", color = TextSecondary, modifier = Modifier.padding(12.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {

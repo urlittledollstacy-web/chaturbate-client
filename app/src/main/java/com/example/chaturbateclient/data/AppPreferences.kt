@@ -13,9 +13,6 @@ class AppPreferences(context: Context) {
     var preferredQuality: String
         get() = prefs.getString("preferred_quality", "Auto") ?: "Auto"
         set(value) = prefs.edit().putString("preferred_quality", value).apply()
-    var webmasterId: String
-        get() = prefs.getString("webmaster_id", "") ?: ""
-        set(value) = prefs.edit().putString("webmaster_id", value.trim()).apply()
     fun loadFavorites(): Set<String> = prefs.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()
     fun saveFavorites(values: Set<String>) = prefs.edit().putStringSet("favorites", values).apply()
 }

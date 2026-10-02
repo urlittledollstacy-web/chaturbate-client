@@ -46,6 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import com.example.chaturbateclient.data.AppPreferences
+import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.data.Room
 
 private val OledBlack = Color.Black\nprivate val OledCard = Color(0xFF0A0A0A)\nprivate val OledElevated = Color(0xFF111111)
@@ -86,7 +89,7 @@ private fun ClientTheme(content: @Composable () -> Unit) {
 @Composable
 private fun ClientApp() {
     var selectedTab by remember { mutableStateOf(0) }
-    var query by remember { mutableStateOf("") }\n    var selectedRoom by remember { mutableStateOf<Room?>(null) }\n    var favorites by remember { mutableStateOf(setOf<String>()) }
+    var query by remember { mutableStateOf("") }\n    var selectedRoom by remember { mutableStateOf<Room?>(null) }\n    val context = LocalContext.current\n    val preferences = remember(context) { AppPreferences(context) }\n    var favorites by remember { mutableStateOf(preferences.loadFavorites()) }\n    var autoPlay by remember { mutableStateOf(preferences.autoPlay) }\n    var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
 
     Scaffold(
         containerColor = OledBlack,
@@ -116,10 +119,10 @@ private fun ClientApp() {
             }
         }
     ) { padding ->
-        if (selectedRoom != null) {\n            com.example.chaturbateclient.ui.player.PlayerScreen(\n                username = selectedRoom!!.username,\n                onBack = { selectedRoom = null },\n                isFavorite = favorites.contains(selectedRoom!!.username),\n                onFavorite = {\n                    val name = selectedRoom!!.username\n                    favorites = if (favorites.contains(name)) favorites - name else favorites + name\n                }\n            )\n        } else when (selectedTab) {
+        if (selectedRoom != null) {\n            com.example.chaturbateclient.ui.player.PlayerScreen(\n                username = selectedRoom!!.username,\n                onBack = { selectedRoom = null },\n                isFavorite = favorites.contains(selectedRoom!!.username),\n                onFavorite = {\n                    val name = selectedRoom!!.username\n                    favorites = if (favorites.contains(name)) favorites - name else favorites + name\n                    preferences.saveFavorites(favorites)\n                }\n            )\n        } else when (selectedTab) {
             0 -> HomeScreen(query, { query = it }, Modifier.padding(padding)) { selectedRoom = it }
             1 -> FavoritesScreen(favorites, Modifier.padding(padding))
-            else -> PlaceholderScreen("Settings", Modifier.padding(padding))
+            else -> SettingsScreen(\n                autoPlay = autoPlay,\n                onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },\n                dataSaver = dataSaver,\n                onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },\n                modifier = Modifier.padding(padding)\n            )
         }
     }
 }

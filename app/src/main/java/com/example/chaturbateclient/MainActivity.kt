@@ -153,11 +153,6 @@ private fun ClientApp() {
                 onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
                 dataSaver = dataSaver,
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
-                webmasterId = webmasterId,
-                onWebmasterIdChange = {
-                    webmasterId = it
-                    preferences.webmasterId = it
-                },
                 modifier = Modifier.padding(padding)
             )
         }
@@ -212,7 +207,7 @@ private fun HomeScreen(
             error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(12.dp)) {
                 Text(error, color = TextSecondary)
                 Spacer(Modifier.height(8.dp))
-                Text("Open Settings to configure the API.", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
+                Text("Tap to retry", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
             }
             filtered.isEmpty() -> Text("No rooms match your search.", color = TextSecondary, modifier = Modifier.padding(12.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -32,14 +32,18 @@ object ChaturbateApi {
 
     suspend fun fetchInitialRooms(): List<ApiRoom> = coroutineScope {
         ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) { fetchGenderPage(gender, 0) }
-        }.awaitAll().flatten().deduplicate()
+            async(Dispatchers.IO) {
+                runCatching { fetchGenderPage(gender, 0) }.getOrNull()
+            }
+        }.awaitAll().filterNotNull().flatten().deduplicate()
     }
 
     suspend fun fetchAllOnlineRooms(): List<ApiRoom> = coroutineScope {
         val firstPages = ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) { fetchGenderPageWithCount(gender) }
-        }.awaitAll()
+            async(Dispatchers.IO) {
+                runCatching { fetchGenderPageWithCount(gender) }.getOrNull()
+            }
+        }.awaitAll().filterNotNull()
 
         firstPages.map { page ->
             async(Dispatchers.IO) { fetchRemainingPages(page.gender, page.totalCount, page.rooms) }

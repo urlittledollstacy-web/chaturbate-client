@@ -22,7 +22,6 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,19 +45,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.chaturbateclient.data.DemoRoomRepository
 import com.example.chaturbateclient.data.Room
 
 private val OledBlack = Color.Black\nprivate val OledCard = Color(0xFF0A0A0A)\nprivate val OledElevated = Color(0xFF111111)
 private val OledSurface = Color(0xFF080808)
 private val TextPrimary = Color(0xFFF5F5F5)
 private val TextSecondary = Color(0xFF9A9A9A)\nprivate val Accent = Color(0xFFD8B4FE)
-
-data class Room(
-    val username: String,
-    val viewers: Int,
-    val category: String
-)
 
 private val demoRooms = listOf(
     Room("Room preview", 0, "API pending"),

@@ -54,6 +54,7 @@ import com.example.chaturbateclient.data.Room
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private val OledBlack = Color.Black
@@ -99,17 +100,29 @@ private fun ClientApp() {
     var roomError by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableStateOf(0) }
 
-    LaunchedEffect(selectedTab, refreshNonce) {
+    LaunchedEffect(selectedTab, refreshNonce, query) {
         if (selectedTab == 0) {
+            if (query.isNotBlank()) {
+                delay(350)
+            }
+
             loadingRooms = true
             roomError = null
             runCatching {
-                withContext(Dispatchers.IO) { ChaturbateApi.fetchOnlineRooms() }
+                withContext(Dispatchers.IO) {
+                    ChaturbateApi.fetchOnlineRooms(query = query.takeIf { it.isNotBlank() })
+                }
             }.onSuccess {
                 rooms = it
-                if (it.isEmpty()) roomError = "No live rooms returned."
+                if (it.isEmpty()) {
+                    roomError = if (query.isBlank()) {
+                        "No live rooms returned."
+                    } else {
+                        "No live rooms found for "$query"."
+                    }
+                }
             }.onFailure {
-                roomError = it.message ?: "Unable to load live rooms."
+                roomError = it.message ?: "Unable to search live rooms."
             }
             loadingRooms = false
         }
@@ -203,7 +216,11 @@ private fun HomeScreen(
         Spacer(Modifier.height(8.dp))
 
         when {
-            loading -> Text("Loading live rooms…", color = TextSecondary, modifier = Modifier.padding(12.dp))
+            loading -> Text(
+                if (query.isBlank()) "Loading live rooms…" else "Searching live rooms…",
+                color = TextSecondary,
+                modifier = Modifier.padding(12.dp)
+            )
             error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(12.dp)) {
                 Text(error, color = TextSecondary)
                 Spacer(Modifier.height(8.dp))

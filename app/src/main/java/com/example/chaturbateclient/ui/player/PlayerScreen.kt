@@ -50,6 +50,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.example.chaturbateclient.data.ChaturbateApi
+import com.example.chaturbateclient.player.VideoQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

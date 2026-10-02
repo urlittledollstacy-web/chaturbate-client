@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runInterruptible
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -103,10 +104,8 @@ object ChaturbateApi {
                 failures++
                 continue
             }
-            val pageCount = min(
-                MAX_PAGES_PER_FEED,
-                ((total + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT).coerceAtLeast(1)
-            )
+            val offsets = pageOffsets(total, ROOM_PAGE_LIMIT, MAX_PAGES_PER_FEED)
+            val pageCount = offsets.size
             if (pageCount <= 1) continue
 
             for (batch in (1 until pageCount).chunked(MAX_CONCURRENT_REQUESTS)) {
@@ -172,7 +171,7 @@ object ChaturbateApi {
         )
     }
 
-    private fun requestJson(url: URL, operation: String): String {
+    private suspend fun requestJson(url: URL, operation: String): String {
         var last: Throwable? = null
         repeat(MAX_RETRIES + 1) { attempt ->
             try {
@@ -185,37 +184,38 @@ object ChaturbateApi {
             } catch (e: Exception) {
                 last = e
             }
-            if (attempt < MAX_RETRIES) Thread.sleep(250L * (attempt + 1))
+            if (attempt < MAX_RETRIES) delay(250L * (attempt + 1))
         }
         throw last ?: IllegalStateException("Network request failed.")
     }
 
-    private fun requestJsonOnce(url: URL, operation: String): String {
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = false
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
-            setRequestProperty("Referer", "$BASE/")
-        }
-        try {
-            val code = connection.responseCode
-            val contentType = connection.contentType
-            val location = connection.getHeaderField("Location")
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText().take(MAX_ERROR_BODY) }.orEmpty()
-            if (code in 300..399) throw failure(operation, url, code, contentType, location, body, "Server redirected the request.")
-            if (code !in 200..299) throw failure(operation, url, code, contentType, location, body, "Chaturbate returned HTTP $code.")
-            if (contentType?.contains("json", ignoreCase = true) != true) {
-                throw failure(operation, url, code, contentType, location, body, "Expected JSON but received a different response.")
+    private suspend fun requestJsonOnce(url: URL, operation: String): String =
+        runInterruptible(Dispatchers.IO) {
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
+                setRequestProperty("Referer", "$BASE/")
             }
-            return body
-        } finally {
-            connection.disconnect()
+            try {
+                val code = connection.responseCode
+                val contentType = connection.contentType
+                val location = connection.getHeaderField("Location")
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText().take(MAX_ERROR_BODY) }.orEmpty()
+                if (code in 300..399) throw failure(operation, url, code, contentType, location, body, "Server redirected the request.")
+                if (code !in 200..299) throw failure(operation, url, code, contentType, location, body, "Chaturbate returned HTTP $code.")
+                if (contentType?.contains("json", ignoreCase = true) != true) {
+                    throw failure(operation, url, code, contentType, location, body, "Expected JSON but received a different response.")
+                }
+                return@runInterruptible body
+            } finally {
+                connection.disconnect()
+            }
         }
-    }
 
     private fun failure(
         operation: String,

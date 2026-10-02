@@ -118,7 +118,7 @@ private fun ClientApp() {
                     roomError = if (query.isBlank()) {
                         "No live rooms returned."
                     } else {
-                        "No live rooms found for "$query"."
+                        "No live rooms found for \"$query\"."
                     }
                 }
             }.onFailure {

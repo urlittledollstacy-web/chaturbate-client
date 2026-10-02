@@ -18,10 +18,8 @@ class DiscoveryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _state = MutableStateFlow(DiscoveryState())
     val state: StateFlow<DiscoveryState> = _state.asStateFlow()
-
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
-
     private val _searchResults = MutableStateFlow<List<ApiRoom>>(emptyList())
     val searchResults: StateFlow<List<ApiRoom>> = _searchResults.asStateFlow()
 
@@ -58,17 +56,22 @@ class DiscoveryViewModel(application: Application) : AndroidViewModel(applicatio
             }
             _state.value = initial.copy(refreshing = true)
             recomputeSearch()
-            completeRefresh()
+
+            val complete = runCatching { repository.refreshComplete() }.getOrElse {
+                _state.value.copy(error = it.message ?: "Catalogue refresh failed.")
+            }
+            _state.value = complete.copy(refreshing = false)
+            recomputeSearch()
         }
     }
 
     private fun completeRefresh() {
-        if (refreshJob?.isActive == true && refreshJob != coroutineContext[Job]) return
-        viewModelScope.launch {
-            val result = runCatching { repository.refreshComplete() }.getOrElse {
-                _state.value.copy(refreshing = false, error = it.message ?: "Catalogue refresh failed.")
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            val complete = runCatching { repository.refreshComplete() }.getOrElse {
+                _state.value.copy(error = it.message ?: "Catalogue refresh failed.")
             }
-            _state.value = result.copy(refreshing = false)
+            _state.value = complete.copy(refreshing = false)
             recomputeSearch()
         }
     }

@@ -126,7 +126,7 @@ object ChaturbateApi {
 
         val rooms = results.flatMap { it.rooms }.deduplicate().take(MAX_TOTAL_ROOMS)
         val successfulFeeds = results.map { it.gender }.toSet().size
-        val complete = failures == 0 && successfulFeeds == ROOM_GENDERS.size
+        val complete = failures == 0 && !budgetExceeded && successfulFeeds == ROOM_GENDERS.size && rooms.size < MAX_TOTAL_ROOMS
         val diagnostic = lastDiagnostic
 
         CatalogFetchResult(

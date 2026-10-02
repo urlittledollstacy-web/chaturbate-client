@@ -54,7 +54,6 @@ import com.example.chaturbateclient.data.Room
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private val OledBlack = Color.Black
@@ -100,29 +99,21 @@ private fun ClientApp() {
     var roomError by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableStateOf(0) }
 
-    LaunchedEffect(selectedTab, refreshNonce, query) {
+    LaunchedEffect(selectedTab, refreshNonce) {
         if (selectedTab == 0) {
-            if (query.isNotBlank()) {
-                delay(350)
-            }
-
             loadingRooms = true
             roomError = null
             runCatching {
                 withContext(Dispatchers.IO) {
-                    ChaturbateApi.fetchOnlineRooms(query = query.takeIf { it.isNotBlank() })
+                    ChaturbateApi.fetchOnlineRooms()
                 }
             }.onSuccess {
                 rooms = it
                 if (it.isEmpty()) {
-                    roomError = if (query.isBlank()) {
-                        "No live rooms returned."
-                    } else {
-                        "No live rooms found for \"$query\"."
-                    }
+                    roomError = "No live rooms returned."
                 }
             }.onFailure {
-                roomError = it.message ?: "Unable to search live rooms."
+                roomError = it.message ?: "Unable to load live rooms."
             }
             loadingRooms = false
         }
@@ -183,10 +174,16 @@ private fun HomeScreen(
     onRoomClick: (ApiRoom) -> Unit,
     onRetry: () -> Unit
 ) {
+    val normalizedQuery = query.trim()
     val filtered = rooms.filter {
-        query.isBlank() ||
-            it.username.contains(query, ignoreCase = true) ||
-            it.category.contains(query, ignoreCase = true)
+        normalizedQuery.isBlank() ||
+            it.username.contains(normalizedQuery, ignoreCase = true) ||
+            it.category.contains(normalizedQuery, ignoreCase = true) ||
+            it.gender.contains(normalizedQuery, ignoreCase = true) ||
+            it.location.contains(normalizedQuery, ignoreCase = true) ||
+            it.country.contains(normalizedQuery, ignoreCase = true) ||
+            it.spokenLanguages.contains(normalizedQuery, ignoreCase = true) ||
+            it.tags.any { tag -> tag.contains(normalizedQuery, ignoreCase = true) }
     }
 
     Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(horizontal = 16.dp)) {
@@ -217,7 +214,7 @@ private fun HomeScreen(
 
         when {
             loading -> Text(
-                if (query.isBlank()) "Loading live rooms…" else "Searching live rooms…",
+                "Loading live rooms…",
                 color = TextSecondary,
                 modifier = Modifier.padding(12.dp)
             )

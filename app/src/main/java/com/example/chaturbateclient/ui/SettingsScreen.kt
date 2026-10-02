@@ -13,11 +13,13 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.chaturbateclient.player.VideoQuality
 
 @Composable
 fun SettingsScreen(
@@ -25,14 +27,13 @@ fun SettingsScreen(
     onAutoPlayChange: (Boolean) -> Unit,
     dataSaver: Boolean,
     onDataSaverChange: (Boolean) -> Unit,
+    preferredQuality: String,
+    onPreferredQualityChange: (String) -> Unit,
+    onShowDiagnostics: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp)
+        modifier = modifier.fillMaxSize().background(Color.Black).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)
     ) {
         Spacer(Modifier.height(18.dp))
         Text("Settings", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
@@ -42,17 +43,37 @@ fun SettingsScreen(
 
         ListItem(
             headlineContent = { Text("Autoplay") },
-            supportingContent = { Text("Start a room automatically when playback is ready.") },
+            supportingContent = { Text("Start playback automatically when a source is ready.") },
             trailingContent = { Switch(checked = autoPlay, onCheckedChange = onAutoPlayChange) }
         )
         HorizontalDivider()
 
         ListItem(
             headlineContent = { Text("Data saver") },
-            supportingContent = { Text("Prefer lower playback quality when enabled.") },
+            supportingContent = { Text("Cap the selected video track to reduce bandwidth.") },
             trailingContent = { Switch(checked = dataSaver, onCheckedChange = onDataSaverChange) }
         )
         HorizontalDivider()
+
+        ListItem(
+            headlineContent = { Text("Preferred quality") },
+            supportingContent = { Text("Used as the initial track constraint when available.") },
+            trailingContent = {
+                TextButton(onClick = {
+                    val current = VideoQuality.entries.firstOrNull { it.label == preferredQuality } ?: VideoQuality.Auto
+                    val next = VideoQuality.entries[(current.ordinal + 1) % VideoQuality.entries.size]
+                    onPreferredQualityChange(next.label)
+                }) {
+                    Text(preferredQuality)
+                }
+            }
+        )
+        HorizontalDivider()
+
+        Spacer(Modifier.height(20.dp))
+        Text("Diagnostics", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("Diagnostics are opt-in and sanitized; credentials, cookies and signed URLs are excluded.", color = Color(0xFF9A9A9A))
+        TextButton(onClick = onShowDiagnostics) { Text("View network diagnostics") }
 
         Spacer(Modifier.height(20.dp))
         Text("OLED theme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

@@ -27,11 +27,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Unit tests
+        run: gradle test --no-daemon
+
+      - name: Android lint
+        run: gradle lintDebug --no-daemon
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
-
-      - name: Upload test APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: chaturbate-client-debug

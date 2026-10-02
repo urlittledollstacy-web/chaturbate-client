@@ -10,11 +10,10 @@ data class PlaybackSource(val roomStatus: String, val hlsUrl: String?)
 object ChaturbateApi {
     private const val BASE = "https://chaturbate.com"
 
-    fun fetchOnlineRooms(webmasterId: String, limit: Int = 100): List<ApiRoom> {
-        require(webmasterId.isNotBlank()) { "A Chaturbate Webmaster ID is required for the official online-room feed." }
-        val url = URL(BASE + "/api/public/affiliates/onlinerooms/?wm=" + encode(webmasterId) + "&client_ip=request_ip&limit=" + limit)
+    fun fetchOnlineRooms(limit: Int = 180): List<ApiRoom> {
+        val url = URL(BASE + "/api/ts/roomlist/room-list/?enable_recommendations=true&limit=" + limit + "&offset=0")
         val root = JSONObject(request(url))
-        val results = root.optJSONArray("results") ?: return emptyList()
+        val results = root.optJSONArray("rooms") ?: return emptyList()
         return buildList {
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue

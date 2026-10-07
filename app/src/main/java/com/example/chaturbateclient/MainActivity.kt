@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
@@ -57,6 +58,7 @@ import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.data.JsonRoomCacheStore
 import com.example.chaturbateclient.data.filterRooms
 import com.example.chaturbateclient.data.normalizedImageUrl
+import com.example.chaturbateclient.ui.DiagnosticsScreen
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.CancellationException
@@ -166,6 +168,7 @@ private fun ClientApp() {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorites") }, label = { Text("Favorites") })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }, label = { Text("Settings") })
+                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(Icons.Outlined.BugReport, contentDescription = "Diagnostics") }, label = { Text("Diagnostics") })
             }
         }
     ) { padding ->
@@ -185,7 +188,7 @@ private fun ClientApp() {
                 onRoomClick = { selectedRoom = it },
                 modifier = Modifier.padding(padding)
             )
-            else -> SettingsScreen(
+            2 -> SettingsScreen(
                 autoPlay = autoPlay,
                 onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
                 dataSaver = dataSaver,
@@ -194,6 +197,7 @@ private fun ClientApp() {
                 onPreferredQualityChange = { preferredQuality = it; preferences.preferredQuality = it },
                 modifier = Modifier.padding(padding)
             )
+            else -> DiagnosticsScreen(rooms = rooms, modifier = Modifier.padding(padding))
         }
     }
 }

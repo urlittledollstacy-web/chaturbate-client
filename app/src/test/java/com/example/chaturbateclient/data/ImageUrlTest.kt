@@ -33,4 +33,30 @@ class ImageUrlTest {
         assertNull(normalizedImageUrl("cdn.test/a.jpg"))
         assertNull(normalizedImageUrl("ftp://cdn.test/a.jpg"))
     }
+
+    @Test
+    fun summarizesUrlShapes() {
+        val rooms = listOf(
+            room("a", "https://cdn.test/a.jpg"),
+            room("b", "http://cdn.test/b.jpg"),
+            room("c", "//cdn.test/c.jpg"),
+            room("d", ""),
+            room("e", "not-a-url")
+        )
+        val stats = summarizeImageUrls(rooms)
+        assertEquals(5, stats.total)
+        assertEquals(1, stats.https)
+        assertEquals(1, stats.cleartextHttp)
+        assertEquals(1, stats.protocolRelative)
+        assertEquals(1, stats.blank)
+        assertEquals(1, stats.other)
+        assertEquals(3, stats.usable)
+    }
+
+    private fun room(name: String, imageUrl: String) = ApiRoom(
+        username = name,
+        viewers = 0,
+        category = "Live",
+        imageUrl = imageUrl
+    )
 }

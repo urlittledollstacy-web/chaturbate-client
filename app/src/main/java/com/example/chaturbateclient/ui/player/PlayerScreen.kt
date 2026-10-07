@@ -51,11 +51,20 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.player.VideoQuality
+import com.example.chaturbateclient.player.VideoResizeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun resizeModeFor(mode: VideoResizeMode): Int = when (mode) {
+    VideoResizeMode.Original -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    VideoResizeMode.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    VideoResizeMode.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -67,6 +76,7 @@ fun PlayerScreen(
     autoPlay: Boolean,
     dataSaver: Boolean,
     preferredQuality: String,
+    videoResizeMode: String,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -82,6 +92,7 @@ fun PlayerScreen(
     var playbackError by remember { mutableStateOf<String?>(null) }
 
     val trackSelector = remember(context) { DefaultTrackSelector(context) }
+    val resize = VideoResizeMode.fromLabel(videoResizeMode)
     val player = remember(context) {
         ExoPlayer.Builder(context).setTrackSelector(trackSelector).build()
     }
@@ -191,7 +202,8 @@ fun PlayerScreen(
 
     if (fullscreen) {
         AndroidView(
-            factory = { PlayerView(it).apply { useController = true; this.player = player } },
+            factory = { PlayerView(it).apply { useController = true; this.player = player; resizeMode = resizeModeFor(resize) } },
+            update = { it.resizeMode = resizeModeFor(resize) },
             modifier = modifier.fillMaxSize().background(Color.Black)
         )
         return
@@ -209,9 +221,11 @@ fun PlayerScreen(
                         controllerAutoShow = true
                         controllerHideOnTouch = true
                         this.player = player
+                        resizeMode = resizeModeFor(resize)
                         setShutterBackgroundColor(android.graphics.Color.BLACK)
                     }
                 },
+                update = { it.resizeMode = resizeModeFor(resize) },
                 modifier = Modifier.fillMaxSize()
             )
             if (source == null) {

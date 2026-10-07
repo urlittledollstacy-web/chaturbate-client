@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.chaturbateclient.player.VideoQuality
+import com.example.chaturbateclient.player.VideoResizeMode
 
 @Composable
 fun SettingsScreen(
@@ -36,6 +37,8 @@ fun SettingsScreen(
     onDataSaverChange: (Boolean) -> Unit,
     preferredQuality: String,
     onPreferredQualityChange: (String) -> Unit,
+    resizeMode: String,
+    onResizeModeChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -82,6 +85,32 @@ fun SettingsScreen(
                                 onClick = {
                                     onPreferredQualityChange(item.label)
                                     showQualityMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        )
+        HorizontalDivider()
+
+        var showResizeMenu by remember { mutableStateOf(false) }
+        ListItem(
+            headlineContent = { Text("Video resize") },
+            supportingContent = { Text("Original keeps the aspect ratio, Zoom fills and crops, Stretch fills and distorts.") },
+            trailingContent = {
+                Box {
+                    TextButton(onClick = { showResizeMenu = true }) { Text(resizeMode) }
+                    DropdownMenu(
+                        expanded = showResizeMenu,
+                        onDismissRequest = { showResizeMenu = false }
+                    ) {
+                        VideoResizeMode.entries.forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item.label) },
+                                onClick = {
+                                    onResizeModeChange(item.label)
+                                    showResizeMenu = false
                                 }
                             )
                         }

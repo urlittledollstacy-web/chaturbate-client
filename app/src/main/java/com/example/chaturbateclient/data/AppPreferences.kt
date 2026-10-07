@@ -13,6 +13,9 @@ class AppPreferences(context: Context) {
     var preferredQuality: String
         get() = prefs.getString("preferred_quality", "Auto") ?: "Auto"
         set(value) = prefs.edit().putString("preferred_quality", value).apply()
+    var videoResizeMode: String
+        get() = prefs.getString("video_resize_mode", "Original") ?: "Original"
+        set(value) = prefs.edit().putString("video_resize_mode", value).apply()
 
     fun loadFavorites(): Set<String> =
         prefs.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()

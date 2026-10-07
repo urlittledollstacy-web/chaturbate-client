@@ -104,6 +104,7 @@ private fun ClientApp() {
     var autoPlay by remember { mutableStateOf(preferences.autoPlay) }
     var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
     var preferredQuality by remember { mutableStateOf(preferences.preferredQuality) }
+    var videoResizeMode by remember { mutableStateOf(preferences.videoResizeMode) }
     var rooms by remember { mutableStateOf<List<ApiRoom>>(emptyList()) }
     var loadingRooms by remember { mutableStateOf(false) }
     var roomError by remember { mutableStateOf<String?>(null) }
@@ -155,6 +156,7 @@ private fun ClientApp() {
             autoPlay = autoPlay,
             dataSaver = dataSaver,
             preferredQuality = preferredQuality,
+            videoResizeMode = videoResizeMode,
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -193,6 +195,8 @@ private fun ClientApp() {
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
                 preferredQuality = preferredQuality,
                 onPreferredQualityChange = { preferredQuality = it; preferences.preferredQuality = it },
+                resizeMode = videoResizeMode,
+                onResizeModeChange = { videoResizeMode = it; preferences.videoResizeMode = it },
                 modifier = Modifier.padding(padding)
             )
         }

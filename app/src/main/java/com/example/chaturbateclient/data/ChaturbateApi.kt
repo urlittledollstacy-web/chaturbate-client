@@ -28,23 +28,38 @@ object ChaturbateApi {
     private const val BASE = "https://chaturbate.com"
     private const val ROOM_PAGE_LIMIT = 90
 
+    // Test seam: points the client at a local server so request handling
+    // (redirects, content-type, pagination) can be exercised end to end.
+    internal var baseOverride: String? = null
+
+    private fun base(): String = baseOverride ?: BASE
+
     // These are the four gender/category feeds exposed by the current Chaturbate room list.
     private val ROOM_GENDERS = listOf("f", "m", "c", "s")
 
     suspend fun fetchInitialRooms(): List<ApiRoom> = coroutineScope {
-        ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) {
-                runCatching { fetchGenderPage(gender, 0) }.getOrNull()
-            }
-        }.awaitAll().filterNotNull().flatten().deduplicate()
+        val attempts = ROOM_GENDERS.map { gender ->
+            async(Dispatchers.IO) { runCatching { fetchGenderPage(gender, 0) } }
+        }.awaitAll()
+        val rooms = attempts.mapNotNull { it.getOrNull() }.flatten().deduplicate()
+        if (rooms.isEmpty()) {
+            // Surface the real reason (e.g. session required) instead of hiding
+            // every failure behind an empty catalogue.
+            attempts.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+        }
+        rooms
     }
 
     suspend fun fetchAllOnlineRooms(): List<ApiRoom> = coroutineScope {
-        val firstPages = ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) {
-                runCatching { fetchGenderPageWithCount(gender) }.getOrNull()
-            }
-        }.awaitAll().filterNotNull()
+        val firstAttempts = ROOM_GENDERS.map { gender ->
+            async(Dispatchers.IO) { runCatching { fetchGenderPageWithCount(gender) } }
+        }.awaitAll()
+        val firstPages = firstAttempts.mapNotNull { it.getOrNull() }
+
+        if (firstPages.isEmpty()) {
+            firstAttempts.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+            return@coroutineScope emptyList()
+        }
 
         firstPages.map { page ->
             async(Dispatchers.IO) { fetchRemainingPages(page.gender, page.totalCount, page.rooms) }
@@ -90,7 +105,7 @@ object ChaturbateApi {
 
     private fun roomListUrl(gender: String, offset: Int): URL =
         URL(
-            BASE + "/api/ts/roomlist/room-list/" +
+            base() + "/api/ts/roomlist/room-list/" +
                 "?enable_recommendations=true" +
                 "&genders=" + encode(gender) +
                 "&limit=" + ROOM_PAGE_LIMIT +
@@ -106,7 +121,7 @@ object ChaturbateApi {
     fun fetchPlaybackSource(username: String): PlaybackSource {
         val clean = username.trim().lowercase()
         require(clean.isNotEmpty()) { "Username is empty." }
-        val url = URL(BASE + "/api/chatvideocontext/" + encode(clean) + "/")
+        val url = URL(base() + "/api/chatvideocontext/" + encode(clean) + "/")
         val root = JSONObject(request(url))
         return PlaybackSource(
             roomStatus = root.optString("room_status", "offline"),
@@ -172,7 +187,7 @@ object ChaturbateApi {
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
-            setRequestProperty("Referer", BASE + "/")
+            setRequestProperty("Referer", base() + "/")
         }
 
         try {

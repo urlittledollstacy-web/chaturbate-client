@@ -12,6 +12,7 @@ fun filterRooms(rooms: List<ApiRoom>, query: String): List<ApiRoom> {
     return rooms.filter { room ->
         room.username.contains(q, ignoreCase = true) ||
             room.category.contains(q, ignoreCase = true) ||
+            room.subject.contains(q, ignoreCase = true) ||
             room.gender.contains(q, ignoreCase = true) ||
             room.location.contains(q, ignoreCase = true) ||
             room.country.contains(q, ignoreCase = true) ||

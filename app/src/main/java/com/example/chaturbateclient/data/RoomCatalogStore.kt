@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Bumped whenever the persisted catalogue shape changes. */
-const val ROOM_CACHE_SCHEMA_VERSION = 2
+const val ROOM_CACHE_SCHEMA_VERSION = 3
 
 /**
  * Pure encode/decode for the room-cache payload.
@@ -25,6 +25,7 @@ object RoomCacheCodec {
                     put("username", room.username)
                     put("viewers", room.viewers)
                     put("category", room.category)
+                    put("subject", room.subject)
                     put("imageUrl", room.imageUrl)
                     put("gender", room.gender)
                     put("location", room.location)
@@ -58,6 +59,7 @@ object RoomCacheCodec {
                             username = username,
                             viewers = item.optInt("viewers", 0).coerceAtLeast(0),
                             category = item.optString("category"),
+                            subject = item.optString("subject"),
                             imageUrl = item.optString("imageUrl"),
                             gender = item.optString("gender"),
                             location = item.optString("location"),

@@ -18,7 +18,8 @@ data class ApiRoom(
     val location: String = "",
     val country: String = "",
     val spokenLanguages: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val subject: String = ""
 )
 
 data class PlaybackSource(val roomStatus: String, val hlsUrl: String?)
@@ -96,7 +97,7 @@ object ChaturbateApi {
                 "&offset=" + offset
         )
 
-    private fun List<ApiRoom>.deduplicate(): List<ApiRoom> {
+    internal fun List<ApiRoom>.deduplicate(): List<ApiRoom> {
         val unique = LinkedHashMap<String, ApiRoom>()
         forEach { unique.putIfAbsent(it.username.lowercase(), it) }
         return unique.values.toList()
@@ -135,10 +136,9 @@ object ChaturbateApi {
                         viewers = item.optInt(
                             "num_users",
                             item.optInt("num_viewers", 0)
-                        ),
-                        category = subject.ifBlank {
-                            gender.ifBlank { "Live" }
-                        },
+                        ).coerceAtLeast(0),
+                        category = gender.ifBlank { "Live" },
+                        subject = subject,
                         imageUrl = item.optString("image_url"),
                         gender = gender,
                         location = location,

@@ -281,7 +281,10 @@ private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(room.username, fontWeight = FontWeight.SemiBold)
-                Text(room.category, color = TextSecondary, maxLines = 1)
+                val subtitle = room.subject.ifBlank { room.category }
+                if (subtitle.isNotBlank()) {
+                    Text(subtitle, color = TextSecondary, maxLines = 1)
+                }
             }
             Text(room.viewers.toString() + " viewers", color = TextSecondary)
         }

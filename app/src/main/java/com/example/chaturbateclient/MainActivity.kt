@@ -9,8 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -28,15 +33,16 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -110,17 +116,14 @@ private fun ClientApp() {
     var roomError by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableStateOf(0) }
 
-    LaunchedEffect(selectedTab, refreshNonce) {
-        if (selectedTab != 0) return@LaunchedEffect
-
+    // Loads once at startup and on explicit refresh (pull-to-refresh or tapping Home while on Home).
+    // Switching tabs does not reload.
+    LaunchedEffect(refreshNonce) {
         // Cache reads/writes happen off the main thread.
         val cached = withContext(Dispatchers.IO) { cacheStore.load() }
-        if (cached.isNotEmpty()) {
-            rooms = cached
-            loadingRooms = false
-        } else {
-            loadingRooms = true
-        }
+        if (cached.isNotEmpty()) rooms = cached
+        // Always flag loading so a refresh (not just the first load) shows its indicator.
+        loadingRooms = true
         roomError = null
 
         // Best-effort refresh; never let a smaller/empty result replace a larger good cache.
@@ -167,7 +170,10 @@ private fun ClientApp() {
         containerColor = OledBlack,
         bottomBar = {
             NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = OledBlack) {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
+                NavigationBarItem(selected = selectedTab == 0, onClick = {
+                    // Tapping Home while already on Home refreshes; arriving from another tab does not.
+                    if (selectedTab == 0) refreshNonce++ else selectedTab = 0
+                }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorites") }, label = { Text("Favorites") })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }, label = { Text("Settings") })
             }
@@ -202,6 +208,7 @@ private fun ClientApp() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
     rooms: List<ApiRoom>,
@@ -215,42 +222,45 @@ private fun HomeScreen(
 ) {
     val normalizedQuery = query.trim()
     val filtered = remember(rooms, normalizedQuery) { filterRooms(rooms, normalizedQuery) }
+    val refreshing = loading && rooms.isNotEmpty()
 
-    Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(16.dp))
-        Text("Discover", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text("Search scope: loaded live rooms only.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(12.dp))
-        TextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("Search loaded live rooms") },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = OledSurface,
-                unfocusedContainerColor = OledSurface,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary,
-                focusedPlaceholderColor = TextSecondary,
-                unfocusedPlaceholderColor = TextSecondary,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
+    Column(modifier = modifier.fillMaxSize().background(OledBlack)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Text("Discover", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text("Search scope: loaded live rooms only.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(12.dp))
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("Search loaded live rooms") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = OledSurface,
+                    unfocusedContainerColor = OledSurface,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    focusedPlaceholderColor = TextSecondary,
+                    unfocusedPlaceholderColor = TextSecondary,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
             )
-        )
-        Spacer(Modifier.height(16.dp))
-        Text("Live rooms", color = TextSecondary)
-        Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
+            Text("Live rooms", color = TextSecondary)
+            Spacer(Modifier.height(8.dp))
+        }
 
         when {
             loading && rooms.isEmpty() -> Text(
                 "Loading live rooms…",
                 color = TextSecondary,
-                modifier = Modifier.padding(12.dp)
+                modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
             )
-            error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(12.dp)) {
+            error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)) {
                 Text(error, color = TextSecondary)
                 Spacer(Modifier.height(8.dp))
                 Text("Tap to retry", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
@@ -259,11 +269,23 @@ private fun HomeScreen(
                 if (query.isBlank()) "No live rooms are currently loaded."
                 else "No loaded room matches. This does not mean the profile is offline or nonexistent.",
                 color = TextSecondary,
-                modifier = Modifier.padding(12.dp)
+                modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
             )
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(filtered, key = { it.username.lowercase() }) { room ->
-                    RoomCard(room, onClick = { onRoomClick(room) })
+            else -> PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRetry,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    gridItems(filtered, key = { it.username.lowercase() }) { room ->
+                        RoomGridCard(room, onClick = { onRoomClick(room) })
+                    }
                 }
             }
         }
@@ -282,13 +304,14 @@ private fun RoomThumbFallback(username: String) {
 }
 
 @Composable
-private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
+private fun RoomGridCard(room: ApiRoom, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = OledCard)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                modifier = Modifier.size(58.dp),
-                color = Color(0xFF151515),
-                shape = RoundedCornerShape(16.dp)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 3f)
+                    .background(Color(0xFF151515))
             ) {
                 val imageUrl = normalizedImageUrl(room.imageUrl)
                 if (imageUrl != null) {
@@ -304,15 +327,15 @@ private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
                     RoomThumbFallback(room.username)
                 }
             }
-            Spacer(Modifier.size(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(room.username, fontWeight = FontWeight.SemiBold)
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(room.username, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 val subtitle = room.subject.ifBlank { room.category }
                 if (subtitle.isNotBlank()) {
-                    Text(subtitle, color = TextSecondary, maxLines = 1)
+                    Text(subtitle, color = TextSecondary, maxLines = 1, style = MaterialTheme.typography.bodySmall)
                 }
+                Spacer(Modifier.height(4.dp))
+                Text(room.viewers.toString() + " viewers", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
-            Text(room.viewers.toString() + " viewers", color = TextSecondary)
         }
     }
 }

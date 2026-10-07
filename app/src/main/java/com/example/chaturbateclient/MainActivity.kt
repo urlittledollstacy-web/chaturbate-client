@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,9 +93,9 @@ private fun ClientTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun ClientApp() {
-    var selectedTab by remember { mutableStateOf(0) }
-    var query by remember { mutableStateOf("") }
-    var selectedRoom by remember { mutableStateOf<String?>(null) }
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedRoom by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
     val cacheStore = remember(context) { JsonRoomCacheStore(context) }

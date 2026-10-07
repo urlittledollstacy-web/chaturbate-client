@@ -35,7 +35,7 @@ object ChaturbateApi {
     private fun base(): String = baseOverride ?: BASE
 
     // The four gender/category feeds exposed by the current Chaturbate room list.
-    val DEFAULT_GENDERS = listOf("f", "m", "c", "s")
+    val DEFAULT_GENDERS = listOf("f", "m", "c", "t")
 
     suspend fun fetchInitialRooms(genders: List<String> = DEFAULT_GENDERS): List<ApiRoom> = coroutineScope {
         val attempts = genders.map { gender ->
@@ -155,7 +155,12 @@ object ChaturbateApi {
                         ).coerceAtLeast(0),
                         category = gender.ifBlank { "Live" },
                         subject = subject,
-                        imageUrl = item.optString("image_url"),
+                        imageUrl = firstNonBlank(
+                            item.optString("img"),
+                            item.optString("image_url"),
+                            item.optString("image_url_360x270"),
+                            item.optString("thumb_url")
+                        ),
                         gender = gender,
                         location = location,
                         country = country,
@@ -182,12 +187,12 @@ object ChaturbateApi {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 15_000
-            // The room-list and playback endpoints are session-gated. Without a
-            // session they answer with a 302 to the site's login page; do not hide
-            // that behind a generic error by silently following the redirect.
+            // The room-list endpoint only answers JSON when asked as an AJAX call.
+            // Without X-Requested-With it replies 302 to /?next=... and then HTML.
             instanceFollowRedirects = false
-            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept", "application/json, text/plain, */*")
             setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
+            setRequestProperty("X-Requested-With", "XMLHttpRequest")
             setRequestProperty("Referer", base() + "/")
         }
 
@@ -196,8 +201,9 @@ object ChaturbateApi {
             val contentType = connection.contentType
             if (code in 300..399) {
                 throw IllegalStateException(
-                    "Chaturbate requires a signed-in session for this data (HTTP $code). " +
-                        "No supported public discovery API is configured."
+                    "Chaturbate returned a redirect (HTTP $code) instead of JSON. " +
+                        "The room-list endpoint expects an AJAX request " +
+                        "(X-Requested-With: XMLHttpRequest)."
                 )
             }
             if (code !in 200..299) {
@@ -214,6 +220,9 @@ object ChaturbateApi {
             connection.disconnect()
         }
     }
+
+    private fun firstNonBlank(vararg values: String): String =
+        values.firstOrNull { it.isNotBlank() }?.trim().orEmpty()
 
     private fun encode(value: String): String =
         java.net.URLEncoder.encode(value, Charsets.UTF_8.name())

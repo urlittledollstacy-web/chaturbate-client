@@ -68,12 +68,39 @@ class ChaturbateApiRequestsTest {
 
         val result = ChaturbateApi.fetchInitialRooms()
 
-        assertEquals(listOf("c", "f", "m", "s"), requestedGenders.sorted())
+        assertEquals(listOf("c", "f", "m", "t"), requestedGenders.sorted())
         assertEquals(
-            setOf("room_c", "room_f", "room_m", "room_s", "shared"),
+            setOf("room_c", "room_f", "room_m", "room_t", "shared"),
             result.map { it.username }.toSet()
         )
         assertEquals(result.size, result.map { it.username.lowercase() }.distinct().size)
+    }
+
+    @Test
+    fun parsesImgFieldUsedByCurrentFeed() = runBlocking {
+        enqueue {
+            json(
+                """{"total_count":1,"rooms":[{"username":"solo","num_users":9,"gender":"f","img":"https://thumb.test/solo.jpg"}]}"""
+            )
+        }
+
+        val result = ChaturbateApi.fetchInitialRooms(listOf("f"))
+
+        assertEquals("https://thumb.test/solo.jpg", result.single().imageUrl)
+    }
+
+    @Test
+    fun sendsAjaxHeaderRequiredForJson() = runBlocking {
+        val seen = CopyOnWriteArrayList<String>()
+        enqueue { request ->
+            seen.add(request.getHeader("X-Requested-With").orEmpty())
+            json(roomsJson(listOf("r")))
+        }
+
+        ChaturbateApi.fetchInitialRooms(listOf("f"))
+
+        assertTrue(seen.isNotEmpty())
+        assertTrue(seen.all { it == "XMLHttpRequest" })
     }
 
     @Test
@@ -107,7 +134,7 @@ class ChaturbateApiRequestsTest {
         val result = ChaturbateApi.fetchInitialRooms()
 
         // The failing "m" feed drops out; the other three still load.
-        assertEquals(setOf("room_c", "room_f", "room_s"), result.map { it.username }.toSet())
+        assertEquals(setOf("room_c", "room_f", "room_t"), result.map { it.username }.toSet())
     }
 
     @Test
@@ -124,7 +151,7 @@ class ChaturbateApiRequestsTest {
         val result = ChaturbateApi.fetchAllOnlineRooms()
 
         assertEquals(
-            setOf("f1", "f2", "m1", "m2", "s1", "s2"),
+            setOf("f1", "f2", "m1", "m2", "t1", "t2"),
             result.map { it.username }.toSet()
         )
     }
@@ -140,7 +167,7 @@ class ChaturbateApiRequestsTest {
     }
 
     @Test
-    fun redirectIsReportedAsSessionRequired() = runBlocking {
+    fun redirectIsReportedAsMisconfiguredRequest() = runBlocking {
         enqueue {
             MockResponse()
                 .setResponseCode(302)
@@ -149,9 +176,9 @@ class ChaturbateApiRequestsTest {
 
         try {
             ChaturbateApi.fetchInitialRooms()
-            fail("Expected session-required failure")
+            fail("Expected redirect failure")
         } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("signed-in session"))
+            assertTrue(e.message!!.contains("AJAX"))
             assertTrue(e.message!!.contains("302"))
         }
     }

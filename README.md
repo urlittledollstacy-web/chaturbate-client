@@ -19,15 +19,19 @@ Search filters the live-room records currently loaded into the local catalogue. 
 not a global profile or offline-account search. A room that is not loaded cannot be
 found, and "no match" does not mean an account does not exist.
 
-### Upstream limitation (verified)
+### Upstream feed access (verified)
 
-The room-list feed (`/api/ts/roomlist/room-list/`) and the playback source
-(`/api/chatvideocontext/{username}/`) are **session-gated web endpoints, not a
-supported public API**. Probed unauthenticated, both answer with `HTTP 302` to
-`/?next=...` and then serve HTML, regardless of the requested gender or parameters.
-The client now detects the redirect/non-JSON response and reports that a signed-in
-session is required instead of treating it as an empty catalogue. Discover therefore
-shows no live rooms until a supported discovery interface is configured.
+The room-list feed (`/api/ts/roomlist/room-list/`) is an internal AJAX endpoint. It
+returns JSON only when the request carries `X-Requested-With: XMLHttpRequest`. Without
+that header it answers `HTTP 302` to `/?next=...` and serves HTML, regardless of the
+requested gender or parameters — which is easy to mistake for a login wall. The client
+sends the required header and reads each room's thumbnail from the feed's `img` field
+(with `image_url` / `thumb_url` as fallbacks). Thumbnails are served publicly from
+`thumb.live.mmcdn.com` and need no session.
+
+The playback source (`/api/chatvideocontext/{username}/`) is also an AJAX endpoint, but
+it additionally answers `403 age-gate-required` to unauthenticated clients, so direct
+playback still requires a signed-in, age-verified session.
 
 ## Architecture direction
 

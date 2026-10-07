@@ -263,7 +263,10 @@ fun PlayerScreen(
             }
         }
 
-        Surface(color = Color.Black) {
+        // The player chrome stays dark in every app theme (the video surface is always black),
+        // so pin the content color light. Without this, light themes leave the default dark
+        // icons and title on the black bar, making them invisible though still tappable.
+        Surface(color = Color.Black, contentColor = Color(0xFFF5F5F5)) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }

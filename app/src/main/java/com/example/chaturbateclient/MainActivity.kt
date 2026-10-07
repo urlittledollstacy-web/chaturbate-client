@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -48,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,46 +67,51 @@ import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.data.JsonRoomCacheStore
 import com.example.chaturbateclient.data.filterRooms
 import com.example.chaturbateclient.data.normalizedImageUrl
+import com.example.chaturbateclient.ui.AppTheme
+import com.example.chaturbateclient.ui.ClientTheme
+import com.example.chaturbateclient.ui.LocalAppColors
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val OledBlack = Color.Black
-private val OledCard = Color(0xFF0A0A0A)
-private val OledSurface = Color(0xFF080808)
-private val TextPrimary = Color(0xFFF5F5F5)
-private val TextSecondary = Color(0xFF9A9A9A)
-private val Accent = Color(0xFFD8B4FE)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { ClientTheme { ClientApp() } }
+        setContent { ClientApp() }
     }
 }
 
 @Composable
-private fun ClientTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
-            background = OledBlack,
-            surface = OledSurface,
-            onBackground = TextPrimary,
-            onSurface = TextPrimary
-        ),
-        content = content
-    )
+private fun ClientApp() {
+    val context = LocalContext.current
+    val preferences = remember(context) { AppPreferences(context) }
+    var themeLabel by rememberSaveable { mutableStateOf(preferences.theme) }
+    val theme = AppTheme.fromLabel(themeLabel)
+
+    ClientTheme(theme) {
+        ClientContent(
+            preferences = preferences,
+            themeLabel = themeLabel,
+            onThemeChange = { themeLabel = it; preferences.theme = it }
+        )
+    }
 }
 
 @Composable
-private fun ClientApp() {
+private fun ClientContent(
+    preferences: AppPreferences,
+    themeLabel: String,
+    onThemeChange: (String) -> Unit
+) {
+    val colors = LocalAppColors.current
     var selectedTab by rememberSaveable { mutableStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedRoom by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val preferences = remember(context) { AppPreferences(context) }
     val cacheStore = remember(context) { JsonRoomCacheStore(context) }
 
     var favorites by remember { mutableStateOf(preferences.loadFavorites()) }
@@ -115,6 +123,8 @@ private fun ClientApp() {
     var loadingRooms by remember { mutableStateOf(false) }
     var roomError by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableStateOf(0) }
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
 
     // Loads once at startup and on explicit refresh (pull-to-refresh or tapping Home while on Home).
     // Switching tabs does not reload.
@@ -144,6 +154,11 @@ private fun ClientApp() {
         }
     }
 
+    // A refresh should also return the feed to the top.
+    LaunchedEffect(refreshNonce) {
+        if (refreshNonce > 0) gridState.animateScrollToItem(0)
+    }
+
     BackHandler(enabled = selectedRoom != null) { selectedRoom = null }
 
     if (selectedRoom != null) {
@@ -167,12 +182,17 @@ private fun ClientApp() {
     }
 
     Scaffold(
-        containerColor = OledBlack,
+        containerColor = colors.background,
         bottomBar = {
-            NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = OledBlack) {
+            NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = colors.background) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = {
-                    // Tapping Home while already on Home refreshes; arriving from another tab does not.
-                    if (selectedTab == 0) refreshNonce++ else selectedTab = 0
+                    // Tapping Home while already on Home scrolls to the top; it refreshes only
+                    // when the feed is already at the top. Arriving from another tab does nothing extra.
+                    if (selectedTab == 0) {
+                        if (gridState.firstVisibleItemIndex == 0) refreshNonce++ else scope.launch { gridState.animateScrollToItem(0) }
+                    } else {
+                        selectedTab = 0
+                    }
                 }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorites") }, label = { Text("Favorites") })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }, label = { Text("Settings") })
@@ -188,7 +208,8 @@ private fun ClientApp() {
                 onQueryChange = { query = it },
                 modifier = Modifier.padding(padding),
                 onRoomClick = { selectedRoom = it.username },
-                onRetry = { refreshNonce++ }
+                onRetry = { refreshNonce++ },
+                gridState = gridState
             )
             1 -> FavoritesScreen(
                 favorites = favorites,
@@ -202,6 +223,8 @@ private fun ClientApp() {
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
                 preferredQuality = preferredQuality,
                 onPreferredQualityChange = { preferredQuality = it; preferences.preferredQuality = it },
+                theme = themeLabel,
+                onThemeChange = onThemeChange,
                 modifier = Modifier.padding(padding)
             )
         }
@@ -218,18 +241,20 @@ private fun HomeScreen(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRoomClick: (ApiRoom) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    gridState: LazyGridState
 ) {
+    val colors = LocalAppColors.current
     val normalizedQuery = query.trim()
     val filtered = remember(rooms, normalizedQuery) { filterRooms(rooms, normalizedQuery) }
     val refreshing = loading && rooms.isNotEmpty()
 
-    Column(modifier = modifier.fillMaxSize().background(OledBlack)) {
+    Column(modifier = modifier.fillMaxSize().background(colors.background)) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Spacer(Modifier.height(16.dp))
             Text("Discover", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
-            Text("Search scope: loaded live rooms only.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Text("Search scope: loaded live rooms only.", color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(12.dp))
             TextField(
                 value = query,
@@ -239,36 +264,36 @@ private fun HomeScreen(
                 placeholder = { Text("Search loaded live rooms") },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = OledSurface,
-                    unfocusedContainerColor = OledSurface,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedPlaceholderColor = TextSecondary,
-                    unfocusedPlaceholderColor = TextSecondary,
+                    focusedContainerColor = colors.surface,
+                    unfocusedContainerColor = colors.surface,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary,
+                    focusedPlaceholderColor = colors.textSecondary,
+                    unfocusedPlaceholderColor = colors.textSecondary,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 )
             )
             Spacer(Modifier.height(16.dp))
-            Text("Live rooms", color = TextSecondary)
+            Text("Live rooms", color = colors.textSecondary)
             Spacer(Modifier.height(8.dp))
         }
 
         when {
             loading && rooms.isEmpty() -> Text(
                 "Loading live rooms…",
-                color = TextSecondary,
+                color = colors.textSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
             )
             error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)) {
-                Text(error, color = TextSecondary)
+                Text(error, color = colors.textSecondary)
                 Spacer(Modifier.height(8.dp))
-                Text("Tap to retry", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
+                Text("Tap to retry", color = colors.accent, modifier = Modifier.clickable(onClick = onRetry))
             }
             filtered.isEmpty() -> Text(
                 if (query.isBlank()) "No live rooms are currently loaded."
                 else "No loaded room matches. This does not mean the profile is offline or nonexistent.",
-                color = TextSecondary,
+                color = colors.textSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
             )
             else -> PullToRefreshBox(
@@ -278,6 +303,7 @@ private fun HomeScreen(
             ) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    state = gridState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -294,24 +320,26 @@ private fun HomeScreen(
 
 @Composable
 private fun RoomThumbFallback(username: String) {
+    val colors = LocalAppColors.current
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             username.firstOrNull()?.uppercase() ?: "?",
             fontWeight = FontWeight.SemiBold,
-            color = TextSecondary
+            color = colors.textSecondary
         )
     }
 }
 
 @Composable
 private fun RoomGridCard(room: ApiRoom, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = OledCard)) {
+    val colors = LocalAppColors.current
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = colors.card)) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(4f / 3f)
-                    .background(Color(0xFF151515))
+                    .background(colors.thumbPlaceholder)
             ) {
                 val imageUrl = normalizedImageUrl(room.imageUrl)
                 if (imageUrl != null) {
@@ -331,10 +359,10 @@ private fun RoomGridCard(room: ApiRoom, onClick: () -> Unit) {
                 Text(room.username, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 val subtitle = room.subject.ifBlank { room.category }
                 if (subtitle.isNotBlank()) {
-                    Text(subtitle, color = TextSecondary, maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                    Text(subtitle, color = colors.textSecondary, maxLines = 1, style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(room.viewers.toString() + " viewers", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                Text(room.viewers.toString() + " viewers", color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -342,23 +370,24 @@ private fun RoomGridCard(room: ApiRoom, onClick: () -> Unit) {
 
 @Composable
 private fun FavoritesScreen(favorites: Set<String>, onRoomClick: (String) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(18.dp)) {
+    val colors = LocalAppColors.current
+    Column(modifier = modifier.fillMaxSize().background(colors.background).padding(18.dp)) {
         Text("Favorites", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(
             if (favorites.isEmpty()) "Rooms you favorite will appear here." else favorites.size.toString() + " saved rooms",
-            color = TextSecondary
+            color = colors.textSecondary
         )
         Spacer(Modifier.height(20.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(favorites.toList(), key = { it.lowercase() }) { name ->
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { onRoomClick(name) },
-                    colors = CardDefaults.cardColors(containerColor = OledCard),
+                    colors = CardDefaults.cardColors(containerColor = colors.card),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Star, contentDescription = null, tint = Accent)
+                        Icon(Icons.Outlined.Star, contentDescription = null, tint = colors.accent)
                         Spacer(Modifier.size(12.dp))
                         Text(name, style = MaterialTheme.typography.titleMedium)
                     }

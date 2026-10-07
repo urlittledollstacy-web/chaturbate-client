@@ -16,6 +16,9 @@ class AppPreferences(context: Context) {
     var videoResizeMode: String
         get() = prefs.getString("video_resize_mode", "Original") ?: "Original"
         set(value) = prefs.edit().putString("video_resize_mode", value).apply()
+    var theme: String
+        get() = prefs.getString("app_theme", "OLED Black") ?: "OLED Black"
+        set(value) = prefs.edit().putString("app_theme", value).apply()
 
     fun loadFavorites(): Set<String> =
         prefs.getStringSet("favorites", emptySet())?.toSet() ?: emptySet()

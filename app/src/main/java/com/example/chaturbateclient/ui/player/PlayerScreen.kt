@@ -56,6 +56,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.chaturbateclient.data.ChaturbateApi
+import com.example.chaturbateclient.data.allowedPlaybackUrl
 import com.example.chaturbateclient.player.VideoQuality
 import com.example.chaturbateclient.player.VideoResizeMode
 import kotlinx.coroutines.Dispatchers
@@ -130,8 +131,14 @@ fun PlayerScreen(
                 result.roomStatus != "public" -> status = "Room is " + result.roomStatus
                 result.hlsUrl.isNullOrBlank() -> status = "No HLS source returned"
                 else -> {
-                    source = result.hlsUrl
-                    status = "Preparing playback…"
+                    val safeUrl = allowedPlaybackUrl(result.hlsUrl)
+                    if (safeUrl == null) {
+                        playbackError = "The stream address is not a trusted Chaturbate host."
+                        status = "Playback unavailable"
+                    } else {
+                        source = safeUrl
+                        status = "Preparing playback…"
+                    }
                 }
             }
         }.onFailure {

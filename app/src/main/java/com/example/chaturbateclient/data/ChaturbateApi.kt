@@ -3,6 +3,7 @@ package com.example.chaturbateclient.data
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -18,7 +19,8 @@ data class ApiRoom(
     val location: String = "",
     val country: String = "",
     val spokenLanguages: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val subject: String = ""
 )
 
 data class PlaybackSource(val roomStatus: String, val hlsUrl: String?)
@@ -27,24 +29,45 @@ object ChaturbateApi {
     private const val BASE = "https://chaturbate.com"
     private const val ROOM_PAGE_LIMIT = 90
 
-    // These are the four gender/category feeds exposed by the current Chaturbate room list.
-    private val ROOM_GENDERS = listOf("f", "m", "c", "s")
+    // Refresh fetches a bounded slice of each category instead of paging through
+    // the whole catalogue (thousands of rooms => hundreds of requests per refresh).
+    // 3 pages per category is ~270 rooms each, ~1,080 total, in ~12 requests.
+    private const val MAX_PAGES_PER_GENDER = 3
 
-    suspend fun fetchInitialRooms(): List<ApiRoom> = coroutineScope {
-        ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) {
-                runCatching { fetchGenderPage(gender, 0) }.getOrNull()
-            }
-        }.awaitAll().filterNotNull().flatten().deduplicate()
+    // Test seam: points the client at a local server so request handling
+    // (redirects, content-type, pagination) can be exercised end to end.
+    internal var baseOverride: String? = null
+
+    private fun base(): String = baseOverride ?: BASE
+
+    // The four gender/category feeds exposed by the current Chaturbate room list.
+    val DEFAULT_GENDERS = listOf("f", "m", "c", "t")
+
+    suspend fun fetchInitialRooms(genders: List<String> = DEFAULT_GENDERS): List<ApiRoom> = coroutineScope {
+        val attempts = genders.map { gender ->
+            async(Dispatchers.IO) { runCatching { fetchGenderPage(gender, 0) } }
+        }.awaitAll()
+        val rooms = attempts.mapNotNull { it.getOrNull() }.flatten().deduplicate()
+        if (rooms.isEmpty()) {
+            // Surface the real reason (e.g. session required) instead of hiding
+            // every failure behind an empty catalogue.
+            attempts.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+        }
+        rooms
     }
 
-    suspend fun fetchAllOnlineRooms(): List<ApiRoom> = coroutineScope {
-        val firstPages = ROOM_GENDERS.map { gender ->
-            async(Dispatchers.IO) {
-                runCatching { fetchGenderPageWithCount(gender) }.getOrNull()
-            }
-        }.awaitAll().filterNotNull()
+    suspend fun fetchAllOnlineRooms(genders: List<String> = DEFAULT_GENDERS): List<ApiRoom> = coroutineScope {
+        val firstAttempts = genders.map { gender ->
+            async(Dispatchers.IO) { runCatching { fetchGenderPageWithCount(gender) } }
+        }.awaitAll()
+        val firstPages = firstAttempts.mapNotNull { it.getOrNull() }
 
+        if (firstPages.isEmpty()) {
+            firstAttempts.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { throw it }
+            return@coroutineScope emptyList()
+        }
+
+        // A failed gender feed drops out; the feeds that succeeded still return.
         firstPages.map { page ->
             async(Dispatchers.IO) { fetchRemainingPages(page.gender, page.totalCount, page.rooms) }
         }.awaitAll().flatten().deduplicate()
@@ -79,24 +102,34 @@ object ChaturbateApi {
     ): List<ApiRoom> = coroutineScope {
         if (totalCount <= firstPage.size) return@coroutineScope firstPage
 
-        val pageCount = (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT
+        // Cap the fan-out: never request more than MAX_PAGES_PER_GENDER pages.
+        val pageCount = minOf(
+            (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT,
+            MAX_PAGES_PER_GENDER
+        )
+        // Each later page fails on its own: a single transient error must not cancel
+        // its siblings and discard pages that already loaded. Cancellation still
+        // propagates so leaving the screen stops the remaining requests.
         val remaining = (1 until pageCount).map { page ->
-            async(Dispatchers.IO) { fetchGenderPage(gender, page) }
-        }.awaitAll().flatten()
+            async(Dispatchers.IO) {
+                runCatching { fetchGenderPage(gender, page) }
+                    .onFailure { if (it is CancellationException) throw it }
+            }
+        }.awaitAll().mapNotNull { it.getOrNull() }.flatten()
 
         firstPage + remaining
     }
 
     private fun roomListUrl(gender: String, offset: Int): URL =
         URL(
-            BASE + "/api/ts/roomlist/room-list/" +
+            base() + "/api/ts/roomlist/room-list/" +
                 "?enable_recommendations=true" +
                 "&genders=" + encode(gender) +
                 "&limit=" + ROOM_PAGE_LIMIT +
                 "&offset=" + offset
         )
 
-    private fun List<ApiRoom>.deduplicate(): List<ApiRoom> {
+    internal fun List<ApiRoom>.deduplicate(): List<ApiRoom> {
         val unique = LinkedHashMap<String, ApiRoom>()
         forEach { unique.putIfAbsent(it.username.lowercase(), it) }
         return unique.values.toList()
@@ -105,7 +138,7 @@ object ChaturbateApi {
     fun fetchPlaybackSource(username: String): PlaybackSource {
         val clean = username.trim().lowercase()
         require(clean.isNotEmpty()) { "Username is empty." }
-        val url = URL(BASE + "/api/chatvideocontext/" + encode(clean) + "/")
+        val url = URL(base() + "/api/chatvideocontext/" + encode(clean) + "/")
         val root = JSONObject(request(url))
         return PlaybackSource(
             roomStatus = root.optString("room_status", "offline"),
@@ -135,11 +168,15 @@ object ChaturbateApi {
                         viewers = item.optInt(
                             "num_users",
                             item.optInt("num_viewers", 0)
+                        ).coerceAtLeast(0),
+                        category = gender.ifBlank { "Live" },
+                        subject = subject,
+                        imageUrl = firstNonBlank(
+                            item.optString("img"),
+                            item.optString("image_url"),
+                            item.optString("image_url_360x270"),
+                            item.optString("thumb_url")
                         ),
-                        category = subject.ifBlank {
-                            gender.ifBlank { "Live" }
-                        },
-                        imageUrl = item.optString("image_url"),
                         gender = gender,
                         location = location,
                         country = country,
@@ -166,15 +203,32 @@ object ChaturbateApi {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 15_000
-            setRequestProperty("Accept", "application/json")
+            // The room-list endpoint only answers JSON when asked as an AJAX call.
+            // Without X-Requested-With it replies 302 to /?next=... and then HTML.
+            instanceFollowRedirects = false
+            setRequestProperty("Accept", "application/json, text/plain, */*")
             setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
-            setRequestProperty("Referer", BASE + "/")
+            setRequestProperty("X-Requested-With", "XMLHttpRequest")
+            setRequestProperty("Referer", base() + "/")
         }
 
         try {
             val code = connection.responseCode
+            val contentType = connection.contentType
+            if (code in 300..399) {
+                throw IllegalStateException(
+                    "Chaturbate returned a redirect (HTTP $code) instead of JSON. " +
+                        "The room-list endpoint expects an AJAX request " +
+                        "(X-Requested-With: XMLHttpRequest)."
+                )
+            }
             if (code !in 200..299) {
-                throw IllegalStateException("Chaturbate API returned HTTP " + code)
+                throw IllegalStateException("Chaturbate API returned HTTP $code")
+            }
+            if (contentType?.contains("json", ignoreCase = true) != true) {
+                throw IllegalStateException(
+                    "Expected JSON but received ${contentType ?: "an unknown content type"}."
+                )
             }
 
             return connection.inputStream.bufferedReader().use { it.readText() }
@@ -182,6 +236,9 @@ object ChaturbateApi {
             connection.disconnect()
         }
     }
+
+    private fun firstNonBlank(vararg values: String): String =
+        values.firstOrNull { it.isNotBlank() }?.trim().orEmpty()
 
     private fun encode(value: String): String =
         java.net.URLEncoder.encode(value, Charsets.UTF_8.name())

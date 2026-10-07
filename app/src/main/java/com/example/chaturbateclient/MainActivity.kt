@@ -2,13 +2,17 @@ package com.example.chaturbateclient
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +21,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -26,160 +35,172 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 import com.example.chaturbateclient.data.ApiRoom
 import com.example.chaturbateclient.data.AppPreferences
-import com.example.chaturbateclient.data.ChaturbateApi
-import com.example.chaturbateclient.data.Room
+import com.example.chaturbateclient.data.JsonRoomCacheStore
+import com.example.chaturbateclient.data.filterRooms
+import com.example.chaturbateclient.data.normalizedImageUrl
+import com.example.chaturbateclient.ui.AppTheme
+import com.example.chaturbateclient.ui.ClientTheme
+import com.example.chaturbateclient.ui.LocalAppColors
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
-private val OledBlack = Color.Black
-private val OledCard = Color(0xFF0A0A0A)
-private val OledSurface = Color(0xFF080808)
-private val TextPrimary = Color(0xFFF5F5F5)
-private val TextSecondary = Color(0xFF9A9A9A)
-private val Accent = Color(0xFFD8B4FE)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { ClientTheme { ClientApp() } }
+        setContent { ClientApp() }
     }
-}
-
-@Composable
-private fun ClientTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
-            background = OledBlack,
-            surface = OledSurface,
-            onBackground = TextPrimary,
-            onSurface = TextPrimary
-        ),
-        content = content
-    )
 }
 
 @Composable
 private fun ClientApp() {
-    var selectedTab by remember { mutableStateOf(0) }
-    var query by remember { mutableStateOf("") }
-    var selectedRoom by remember { mutableStateOf<Room?>(null) }
     val context = LocalContext.current
     val preferences = remember(context) { AppPreferences(context) }
+    var themeLabel by rememberSaveable { mutableStateOf(preferences.theme) }
+    val theme = AppTheme.fromLabel(themeLabel)
+
+    ClientTheme(theme) {
+        ClientContent(
+            preferences = preferences,
+            themeLabel = themeLabel,
+            onThemeChange = { themeLabel = it; preferences.theme = it }
+        )
+    }
+}
+
+@Composable
+private fun ClientContent(
+    preferences: AppPreferences,
+    themeLabel: String,
+    onThemeChange: (String) -> Unit
+) {
+    val colors = LocalAppColors.current
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedRoom by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val cacheStore = remember(context) { JsonRoomCacheStore(context) }
+    val homeViewModel: HomeViewModel = viewModel { HomeViewModel(cacheStore) }
+    val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
 
     var favorites by remember { mutableStateOf(preferences.loadFavorites()) }
     var autoPlay by remember { mutableStateOf(preferences.autoPlay) }
     var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
-    var rooms by remember { mutableStateOf<List<ApiRoom>>(emptyList()) }
-    var loadingRooms by remember { mutableStateOf(false) }
-    var roomError by remember { mutableStateOf<String?>(null) }
+    var preferredQuality by remember { mutableStateOf(preferences.preferredQuality) }
+    var videoResizeMode by remember { mutableStateOf(preferences.videoResizeMode) }
     var refreshNonce by remember { mutableStateOf(0) }
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(selectedTab, refreshNonce) {
-        if (selectedTab == 0) {
-            val cached = preferences.loadRoomCache()
-            if (cached.isNotEmpty()) {
-                rooms = cached
-                loadingRooms = false
-            } else {
-                loadingRooms = true
-                roomError = null
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        ChaturbateApi.fetchInitialRooms()
-                    }
-                }.onSuccess {
-                    rooms = it
-                    preferences.saveRoomCache(it)
-                    loadingRooms = false
-                }.onFailure {
-                    roomError = it.message ?: "Unable to load live rooms."
-                    loadingRooms = false
-                }
-            }
+    // A refresh should also return the feed to the top.
+    LaunchedEffect(refreshNonce) {
+        if (refreshNonce > 0) gridState.animateScrollToItem(0)
+    }
 
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    ChaturbateApi.fetchAllOnlineRooms()
-                }
-            }.onSuccess {
-                rooms = it
-                preferences.saveRoomCache(it)
-                if (it.isEmpty()) roomError = "No live rooms returned."
-            }.onFailure {
-                if (rooms.isEmpty()) roomError = it.message ?: "Unable to refresh live rooms."
-            }
-        }
+    BackHandler(enabled = selectedRoom != null) { selectedRoom = null }
+
+    if (selectedRoom != null) {
+        PlayerScreen(
+            username = selectedRoom.orEmpty(),
+            onBack = { selectedRoom = null },
+            isFavorite = favorites.contains(selectedRoom),
+            onFavorite = {
+                val name = selectedRoom.orEmpty()
+                favorites = if (favorites.contains(name)) favorites - name else favorites + name
+                preferences.saveFavorites(favorites)
+            },
+            autoPlay = autoPlay,
+            dataSaver = dataSaver,
+            preferredQuality = preferredQuality,
+            videoResizeMode = videoResizeMode,
+            onVideoResizeModeChange = { videoResizeMode = it; preferences.videoResizeMode = it },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
     }
 
     Scaffold(
-        containerColor = OledBlack,
+        containerColor = colors.background,
         bottomBar = {
-            NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = OledBlack) {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
+            NavigationBar(modifier = Modifier.navigationBarsPadding(), containerColor = colors.background) {
+                NavigationBarItem(selected = selectedTab == 0, onClick = {
+                    // Tapping Home while already on Home scrolls to the top; it refreshes only
+                    // when the feed is already at the top. Arriving from another tab does nothing extra.
+                    if (selectedTab == 0) {
+                        if (gridState.firstVisibleItemIndex == 0) refreshNonce++ else scope.launch { gridState.animateScrollToItem(0) }
+                    } else {
+                        selectedTab = 0
+                    }
+                }, icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }, label = { Text("Home") })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorites") }, label = { Text("Favorites") })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }, label = { Text("Settings") })
             }
         }
     ) { padding ->
-        if (selectedRoom != null) {
-            PlayerScreen(
-                username = selectedRoom!!.username,
-                onBack = { selectedRoom = null },
-                isFavorite = favorites.contains(selectedRoom!!.username),
-                onFavorite = {
-                    val name = selectedRoom!!.username
-                    favorites = if (favorites.contains(name)) favorites - name else favorites + name
-                    preferences.saveFavorites(favorites)
-                }
-            )
-        } else when (selectedTab) {
+        when (selectedTab) {
             0 -> HomeScreen(
-                rooms = rooms,
+                rooms = homeState.rooms,
                 query = query,
-                loading = loadingRooms,
-                error = roomError,
+                loading = homeState.loading,
+                error = homeState.error,
                 onQueryChange = { query = it },
                 modifier = Modifier.padding(padding),
-                onRoomClick = { selectedRoom = Room(it.username, it.viewers, it.category, true) },
-                onRetry = { refreshNonce++ }
+                onRoomClick = { selectedRoom = it.username },
+                onRetry = { refreshNonce++; homeViewModel.refresh() },
+                gridState = gridState
             )
-            1 -> FavoritesScreen(favorites, Modifier.padding(padding))
-            else -> SettingsScreen(
+            1 -> FavoritesScreen(
+                favorites = favorites,
+                onRoomClick = { selectedRoom = it },
+                modifier = Modifier.padding(padding)
+            )
+            2 -> SettingsScreen(
                 autoPlay = autoPlay,
                 onAutoPlayChange = { autoPlay = it; preferences.autoPlay = it },
                 dataSaver = dataSaver,
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
+                preferredQuality = preferredQuality,
+                onPreferredQualityChange = { preferredQuality = it; preferences.preferredQuality = it },
+                theme = themeLabel,
+                onThemeChange = onThemeChange,
                 modifier = Modifier.padding(padding)
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
     rooms: List<ApiRoom>,
@@ -189,61 +210,77 @@ private fun HomeScreen(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRoomClick: (ApiRoom) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    gridState: LazyGridState
 ) {
+    val colors = LocalAppColors.current
     val normalizedQuery = query.trim()
-    val filtered = rooms.filter {
-        normalizedQuery.isBlank() ||
-            it.username.contains(normalizedQuery, ignoreCase = true) ||
-            it.category.contains(normalizedQuery, ignoreCase = true) ||
-            it.gender.contains(normalizedQuery, ignoreCase = true) ||
-            it.location.contains(normalizedQuery, ignoreCase = true) ||
-            it.country.contains(normalizedQuery, ignoreCase = true) ||
-            it.spokenLanguages.contains(normalizedQuery, ignoreCase = true) ||
-            it.tags.any { tag -> tag.contains(normalizedQuery, ignoreCase = true) }
-    }
+    val filtered = remember(rooms, normalizedQuery) { filterRooms(rooms, normalizedQuery) }
+    val refreshing = loading && rooms.isNotEmpty()
 
-    Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(horizontal = 16.dp)) {
-        Spacer(Modifier.height(16.dp))
-        Text("Discover", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
-        TextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("Search rooms") },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = OledSurface,
-                unfocusedContainerColor = OledSurface,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary,
-                focusedPlaceholderColor = TextSecondary,
-                unfocusedPlaceholderColor = TextSecondary,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
+    Column(modifier = modifier.fillMaxSize().background(colors.background)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Text("Discover", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text("Search scope: loaded live rooms only.", color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(12.dp))
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("Search loaded live rooms") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = colors.surface,
+                    unfocusedContainerColor = colors.surface,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary,
+                    focusedPlaceholderColor = colors.textSecondary,
+                    unfocusedPlaceholderColor = colors.textSecondary,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
             )
-        )
-        Spacer(Modifier.height(16.dp))
-        Text("Live rooms", color = TextSecondary)
-        Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
+            Text("Live rooms", color = colors.textSecondary)
+            Spacer(Modifier.height(8.dp))
+        }
 
         when {
-            loading -> Text(
+            loading && rooms.isEmpty() -> Text(
                 "Loading live rooms…",
-                color = TextSecondary,
-                modifier = Modifier.padding(12.dp)
+                color = colors.textSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
             )
-            error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(12.dp)) {
-                Text(error, color = TextSecondary)
+            error != null && rooms.isEmpty() -> Column(modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)) {
+                Text(error, color = colors.textSecondary)
                 Spacer(Modifier.height(8.dp))
-                Text("Tap to retry", color = Accent, modifier = Modifier.clickable(onClick = onRetry))
+                Text("Tap to retry", color = colors.accent, modifier = Modifier.clickable(onClick = onRetry))
             }
-            filtered.isEmpty() -> Text("No rooms match your search.", color = TextSecondary, modifier = Modifier.padding(12.dp))
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(filtered, key = { it.username }) { room ->
-                    RoomCard(room, onClick = { onRoomClick(room) })
+            filtered.isEmpty() -> Text(
+                if (query.isBlank()) "No live rooms are currently loaded."
+                else "No loaded room matches. This does not mean the profile is offline or nonexistent.",
+                color = colors.textSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(12.dp)
+            )
+            else -> PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRetry,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    gridItems(filtered, key = { it.username.lowercase() }) { room ->
+                        RoomGridCard(room, onClick = { onRoomClick(room) })
+                    }
                 }
             }
         }
@@ -251,36 +288,78 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = OledCard)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(modifier = Modifier.size(58.dp), color = Color(0xFF151515), shape = RoundedCornerShape(16.dp)) {}
-            Spacer(Modifier.size(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(room.username, fontWeight = FontWeight.SemiBold)
-                Text(room.category, color = TextSecondary)
+private fun RoomThumbFallback(username: String) {
+    val colors = LocalAppColors.current
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            username.firstOrNull()?.uppercase() ?: "?",
+            fontWeight = FontWeight.SemiBold,
+            color = colors.textSecondary
+        )
+    }
+}
+
+@Composable
+private fun RoomGridCard(room: ApiRoom, onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = colors.card)) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 3f)
+                    .background(colors.thumbPlaceholder)
+            ) {
+                val imageUrl = normalizedImageUrl(room.imageUrl)
+                if (imageUrl != null) {
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        loading = null,
+                        error = { RoomThumbFallback(room.username) }
+                    )
+                } else {
+                    RoomThumbFallback(room.username)
+                }
             }
-            Text(room.viewers.toString() + " viewers", color = TextSecondary)
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(room.username, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                val subtitle = room.subject.ifBlank { room.category }
+                if (subtitle.isNotBlank()) {
+                    Text(subtitle, color = colors.textSecondary, maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(room.viewers.toString() + " viewers", color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
 
 @Composable
-private fun FavoritesScreen(favorites: Set<String>, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(18.dp)) {
+private fun FavoritesScreen(favorites: Set<String>, onRoomClick: (String) -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalAppColors.current
+    Column(modifier = modifier.fillMaxSize().background(colors.background).padding(18.dp)) {
         Text("Favorites", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
         Text(
             if (favorites.isEmpty()) "Rooms you favorite will appear here." else favorites.size.toString() + " saved rooms",
-            color = TextSecondary
+            color = colors.textSecondary
         )
         Spacer(Modifier.height(20.dp))
-        favorites.forEach { name ->
-            Card(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = OledCard), shape = RoundedCornerShape(18.dp)) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Star, contentDescription = null, tint = Accent)
-                    Spacer(Modifier.size(12.dp))
-                    Text(name, style = MaterialTheme.typography.titleMedium)
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(favorites.toList(), key = { it.lowercase() }) { name ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { onRoomClick(name) },
+                    colors = CardDefaults.cardColors(containerColor = colors.card),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Star, contentDescription = null, tint = colors.accent)
+                        Spacer(Modifier.size(12.dp))
+                        Text(name, style = MaterialTheme.typography.titleMedium)
+                    }
                 }
             }
         }

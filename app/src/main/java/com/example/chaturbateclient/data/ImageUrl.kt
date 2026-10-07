@@ -19,34 +19,3 @@ fun normalizedImageUrl(raw: String?): String? {
         else -> null
     }
 }
-
-/** Counts the shape of the raw image URLs in a loaded catalogue, for diagnostics. */
-data class ImageUrlStats(
-    val total: Int,
-    val blank: Int,
-    val https: Int,
-    val cleartextHttp: Int,
-    val protocolRelative: Int,
-    val other: Int
-) {
-    val usable: Int get() = https + cleartextHttp + protocolRelative
-}
-
-fun summarizeImageUrls(rooms: List<ApiRoom>): ImageUrlStats {
-    var blank = 0
-    var https = 0
-    var http = 0
-    var protocolRelative = 0
-    var other = 0
-    rooms.forEach { room ->
-        val url = room.imageUrl.trim()
-        when {
-            url.isEmpty() -> blank++
-            url.startsWith("https://") -> https++
-            url.startsWith("http://") -> http++
-            url.startsWith("//") -> protocolRelative++
-            else -> other++
-        }
-    }
-    return ImageUrlStats(rooms.size, blank, https, http, protocolRelative, other)
-}

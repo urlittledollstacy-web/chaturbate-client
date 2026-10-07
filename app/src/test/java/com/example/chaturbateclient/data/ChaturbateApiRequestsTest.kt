@@ -121,6 +121,24 @@ class ChaturbateApiRequestsTest {
     }
 
     @Test
+    fun refreshCapsPagingAtThreePagesPerGender() = runBlocking {
+        enqueue { request ->
+            val gender = request.requestUrl!!.queryParameter("genders").orEmpty()
+            val offset = request.requestUrl!!.queryParameter("offset")!!.toInt()
+            requestedOffsets.add(offset)
+            // A huge catalogue: without the cap this would page through ~80 offsets.
+            json(roomsJson(List(90) { "${gender}u$offset-$it" }, totalCount = 7000))
+        }
+
+        val result = ChaturbateApi.fetchAllOnlineRooms()
+
+        // 4 genders x 3 pages = 12 requests, offsets 0/90/180 only.
+        assertEquals(listOf(0, 90, 180), requestedOffsets.distinct().sorted())
+        assertEquals(12, requestedOffsets.size)
+        assertEquals(4 * 3 * 90, result.size)
+    }
+
+    @Test
     fun initialRoomsDropsFailedGenderAndKeepsOthers() = runBlocking {
         enqueue { request ->
             val gender = request.requestUrl!!.queryParameter("genders").orEmpty()

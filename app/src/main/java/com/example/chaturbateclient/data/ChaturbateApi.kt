@@ -28,6 +28,11 @@ object ChaturbateApi {
     private const val BASE = "https://chaturbate.com"
     private const val ROOM_PAGE_LIMIT = 90
 
+    // Refresh fetches a bounded slice of each category instead of paging through
+    // the whole catalogue (thousands of rooms => hundreds of requests per refresh).
+    // 3 pages per category is ~270 rooms each, ~1,080 total, in ~12 requests.
+    private const val MAX_PAGES_PER_GENDER = 3
+
     // Test seam: points the client at a local server so request handling
     // (redirects, content-type, pagination) can be exercised end to end.
     internal var baseOverride: String? = null
@@ -96,7 +101,11 @@ object ChaturbateApi {
     ): List<ApiRoom> = coroutineScope {
         if (totalCount <= firstPage.size) return@coroutineScope firstPage
 
-        val pageCount = (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT
+        // Cap the fan-out: never request more than MAX_PAGES_PER_GENDER pages.
+        val pageCount = minOf(
+            (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT,
+            MAX_PAGES_PER_GENDER
+        )
         val remaining = (1 until pageCount).map { page ->
             async(Dispatchers.IO) { fetchGenderPage(gender, page) }
         }.awaitAll().flatten()

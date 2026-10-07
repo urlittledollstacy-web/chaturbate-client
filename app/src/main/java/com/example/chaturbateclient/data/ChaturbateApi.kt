@@ -166,6 +166,10 @@ object ChaturbateApi {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 15_000
+            // The room-list and playback endpoints are session-gated. Without a
+            // session they answer with a 302 to the site's login page; do not hide
+            // that behind a generic error by silently following the redirect.
+            instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "ChaturbateClient/0.1 Android")
             setRequestProperty("Referer", BASE + "/")
@@ -173,8 +177,20 @@ object ChaturbateApi {
 
         try {
             val code = connection.responseCode
+            val contentType = connection.contentType
+            if (code in 300..399) {
+                throw IllegalStateException(
+                    "Chaturbate requires a signed-in session for this data (HTTP $code). " +
+                        "No supported public discovery API is configured."
+                )
+            }
             if (code !in 200..299) {
-                throw IllegalStateException("Chaturbate API returned HTTP " + code)
+                throw IllegalStateException("Chaturbate API returned HTTP $code")
+            }
+            if (contentType?.contains("json", ignoreCase = true) != true) {
+                throw IllegalStateException(
+                    "Expected JSON but received ${contentType ?: "an unknown content type"}."
+                )
             }
 
             return connection.inputStream.bufferedReader().use { it.readText() }

@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,12 +50,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.chaturbateclient.data.ApiRoom
 import com.example.chaturbateclient.data.AppPreferences
 import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.data.JsonRoomCacheStore
 import com.example.chaturbateclient.data.filterRooms
+import com.example.chaturbateclient.data.normalizedImageUrl
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.CancellationException
@@ -265,17 +267,37 @@ private fun HomeScreen(
 }
 
 @Composable
+private fun RoomThumbFallback(username: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            username.firstOrNull()?.uppercase() ?: "?",
+            fontWeight = FontWeight.SemiBold,
+            color = TextSecondary
+        )
+    }
+}
+
+@Composable
 private fun RoomCard(room: ApiRoom, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = OledCard)) {
         Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(modifier = Modifier.size(58.dp), color = Color(0xFF151515), shape = RoundedCornerShape(16.dp)) {
-                if (room.imageUrl.startsWith("https://")) {
-                    AsyncImage(
-                        model = room.imageUrl,
+            Surface(
+                modifier = Modifier.size(58.dp),
+                color = Color(0xFF151515),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                val imageUrl = normalizedImageUrl(room.imageUrl)
+                if (imageUrl != null) {
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        loading = null,
+                        error = { RoomThumbFallback(room.username) }
                     )
+                } else {
+                    RoomThumbFallback(room.username)
                 }
             }
             Spacer(Modifier.size(12.dp))

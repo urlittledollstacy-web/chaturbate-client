@@ -3,6 +3,7 @@ package com.example.chaturbateclient.data
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -106,9 +107,15 @@ object ChaturbateApi {
             (totalCount + ROOM_PAGE_LIMIT - 1) / ROOM_PAGE_LIMIT,
             MAX_PAGES_PER_GENDER
         )
+        // Each later page fails on its own: a single transient error must not cancel
+        // its siblings and discard pages that already loaded. Cancellation still
+        // propagates so leaving the screen stops the remaining requests.
         val remaining = (1 until pageCount).map { page ->
-            async(Dispatchers.IO) { fetchGenderPage(gender, page) }
-        }.awaitAll().flatten()
+            async(Dispatchers.IO) {
+                runCatching { fetchGenderPage(gender, page) }
+                    .onFailure { if (it is CancellationException) throw it }
+            }
+        }.awaitAll().mapNotNull { it.getOrNull() }.flatten()
 
         firstPage + remaining
     }

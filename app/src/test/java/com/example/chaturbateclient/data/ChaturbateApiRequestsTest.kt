@@ -175,6 +175,28 @@ class ChaturbateApiRequestsTest {
     }
 
     @Test
+    fun laterPageFailureKeepsOtherPagesAndFeeds() = runBlocking {
+        enqueue { request ->
+            val gender = request.requestUrl!!.queryParameter("genders").orEmpty()
+            val offset = request.requestUrl!!.queryParameter("offset")!!.toInt()
+            if (gender == "f" && offset == 90) {
+                MockResponse().setResponseCode(500)
+            } else {
+                json(roomsJson(List(90) { "${gender}u$offset-$it" }, totalCount = 200))
+            }
+        }
+
+        val result = ChaturbateApi.fetchAllOnlineRooms()
+
+        // The single failed page (f offset=90) drops out, but the page after it and
+        // every other gender feed still come back instead of the whole refresh failing.
+        assertTrue(result.any { it.username == "fu0-0" })
+        assertTrue(result.any { it.username == "fu180-0" })
+        assertTrue(result.none { it.username.startsWith("fu90-") })
+        assertTrue(result.any { it.username == "mu0-0" })
+    }
+
+    @Test
     fun customGenderListIsHonoured() = runBlocking {
         enqueue { json(roomsJson(listOf("only"))) }
 

@@ -94,6 +94,52 @@ class ChaturbateApiRequestsTest {
     }
 
     @Test
+    fun initialRoomsDropsFailedGenderAndKeepsOthers() = runBlocking {
+        enqueue { request ->
+            val gender = request.requestUrl!!.queryParameter("genders").orEmpty()
+            if (gender == "m") {
+                MockResponse().setResponseCode(500)
+            } else {
+                json(roomsJson(listOf("room_$gender")))
+            }
+        }
+
+        val result = ChaturbateApi.fetchInitialRooms()
+
+        // The failing "m" feed drops out; the other three still load.
+        assertEquals(setOf("room_c", "room_f", "room_s"), result.map { it.username }.toSet())
+    }
+
+    @Test
+    fun allOnlineRoomsKeepsSuccessfulFeedsWhenOneFails() = runBlocking {
+        enqueue { request ->
+            val gender = request.requestUrl!!.queryParameter("genders").orEmpty()
+            if (gender == "c") {
+                MockResponse().setResponseCode(500)
+            } else {
+                json(roomsJson(listOf("${gender}1", "${gender}2")))
+            }
+        }
+
+        val result = ChaturbateApi.fetchAllOnlineRooms()
+
+        assertEquals(
+            setOf("f1", "f2", "m1", "m2", "s1", "s2"),
+            result.map { it.username }.toSet()
+        )
+    }
+
+    @Test
+    fun customGenderListIsHonoured() = runBlocking {
+        enqueue { json(roomsJson(listOf("only"))) }
+
+        val result = ChaturbateApi.fetchInitialRooms(listOf("f"))
+
+        assertEquals(listOf("only"), result.map { it.username })
+        assertEquals("f", server.takeRequest().requestUrl!!.queryParameter("genders"))
+    }
+
+    @Test
     fun redirectIsReportedAsSessionRequired() = runBlocking {
         enqueue {
             MockResponse()

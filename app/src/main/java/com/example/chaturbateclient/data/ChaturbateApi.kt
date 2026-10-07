@@ -34,11 +34,11 @@ object ChaturbateApi {
 
     private fun base(): String = baseOverride ?: BASE
 
-    // These are the four gender/category feeds exposed by the current Chaturbate room list.
-    private val ROOM_GENDERS = listOf("f", "m", "c", "s")
+    // The four gender/category feeds exposed by the current Chaturbate room list.
+    val DEFAULT_GENDERS = listOf("f", "m", "c", "s")
 
-    suspend fun fetchInitialRooms(): List<ApiRoom> = coroutineScope {
-        val attempts = ROOM_GENDERS.map { gender ->
+    suspend fun fetchInitialRooms(genders: List<String> = DEFAULT_GENDERS): List<ApiRoom> = coroutineScope {
+        val attempts = genders.map { gender ->
             async(Dispatchers.IO) { runCatching { fetchGenderPage(gender, 0) } }
         }.awaitAll()
         val rooms = attempts.mapNotNull { it.getOrNull() }.flatten().deduplicate()
@@ -50,8 +50,8 @@ object ChaturbateApi {
         rooms
     }
 
-    suspend fun fetchAllOnlineRooms(): List<ApiRoom> = coroutineScope {
-        val firstAttempts = ROOM_GENDERS.map { gender ->
+    suspend fun fetchAllOnlineRooms(genders: List<String> = DEFAULT_GENDERS): List<ApiRoom> = coroutineScope {
+        val firstAttempts = genders.map { gender ->
             async(Dispatchers.IO) { runCatching { fetchGenderPageWithCount(gender) } }
         }.awaitAll()
         val firstPages = firstAttempts.mapNotNull { it.getOrNull() }
@@ -61,6 +61,7 @@ object ChaturbateApi {
             return@coroutineScope emptyList()
         }
 
+        // A failed gender feed drops out; the feeds that succeeded still return.
         firstPages.map { page ->
             async(Dispatchers.IO) { fetchRemainingPages(page.gender, page.totalCount, page.rooms) }
         }.awaitAll().flatten().deduplicate()

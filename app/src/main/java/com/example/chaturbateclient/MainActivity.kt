@@ -54,6 +54,7 @@ import com.example.chaturbateclient.data.ApiRoom
 import com.example.chaturbateclient.data.AppPreferences
 import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.data.JsonRoomCacheStore
+import com.example.chaturbateclient.data.filterRooms
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
 import kotlinx.coroutines.Dispatchers
@@ -205,16 +206,7 @@ private fun HomeScreen(
     onRetry: () -> Unit
 ) {
     val normalizedQuery = query.trim()
-    val filtered = rooms.filter {
-        normalizedQuery.isBlank() ||
-            it.username.contains(normalizedQuery, ignoreCase = true) ||
-            it.category.contains(normalizedQuery, ignoreCase = true) ||
-            it.gender.contains(normalizedQuery, ignoreCase = true) ||
-            it.location.contains(normalizedQuery, ignoreCase = true) ||
-            it.country.contains(normalizedQuery, ignoreCase = true) ||
-            it.spokenLanguages.contains(normalizedQuery, ignoreCase = true) ||
-            it.tags.any { tag -> tag.contains(normalizedQuery, ignoreCase = true) }
-    }
+    val filtered = filterRooms(rooms, normalizedQuery)
 
     Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(16.dp))

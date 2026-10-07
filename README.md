@@ -54,5 +54,12 @@ Before implementing direct playback, verify:
 ## Build
 
 Open the repository in Android Studio with a current JDK 17 installation and let Gradle sync.
+A Gradle wrapper is included, so a command-line build works without a local Gradle install:
 
-> The current UI intentionally uses placeholder room data. No credentials or private API tokens belong in the repository.
+```bash
+./gradlew testDebugUnitTest   # unit tests
+./gradlew lintDebug           # Android lint
+./gradlew assembleDebug       # debug APK
+```
+
+> No credentials or private API tokens belong in the repository.

@@ -49,6 +49,7 @@ private data class ProbeResult(val plain: String, val withReferer: String)
 fun DiagnosticsScreen(rooms: List<ApiRoom>, modifier: Modifier = Modifier) {
     val stats = remember(rooms) { summarizeImageUrls(rooms) }
     val sample = remember(rooms) { rooms.mapNotNull { r -> normalizedImageUrl(r.imageUrl)?.let { r.username to it } }.take(8) }
+    val rawSample = remember(rooms) { rooms.take(8) }
     val scope = rememberCoroutineScope()
 
     var results by remember { mutableStateOf<Map<String, ProbeResult>>(emptyMap()) }
@@ -98,22 +99,42 @@ fun DiagnosticsScreen(rooms: List<ApiRoom>, modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(16.dp))
 
-        if (sample.isEmpty()) {
-            Text("No usable image URLs in the loaded catalogue.", color = DiagSecondary)
+        if (rooms.isEmpty()) {
+            Text("No rooms loaded at all — the catalogue is empty.", color = DiagSecondary)
         } else {
-            sample.forEach { (username, url) ->
-                Text(username, fontWeight = FontWeight.SemiBold)
-                Text(url, color = DiagSecondary, fontFamily = FontFamily.Monospace)
-                val r = results[url]
+            Text("Raw image values on first ${rawSample.size} rooms:", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            rawSample.forEach { room ->
+                Text(room.username, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = when {
-                        r == null -> "not probed yet"
-                        else -> "no referer → ${r.plain}\nwith referer → ${r.withReferer}"
-                    },
+                    "imageUrl = \"${room.imageUrl}\"",
                     color = Color(0xFFB0B0B0),
                     fontFamily = FontFamily.Monospace
                 )
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
+            }
+
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            if (sample.isEmpty()) {
+                Text("No usable image URLs in the loaded catalogue.", color = DiagSecondary)
+            } else {
+                sample.forEach { (username, url) ->
+                    Text(username, fontWeight = FontWeight.SemiBold)
+                    Text(url, color = DiagSecondary, fontFamily = FontFamily.Monospace)
+                    val r = results[url]
+                    Text(
+                        text = when {
+                            r == null -> "not probed yet"
+                            else -> "no referer → ${r.plain}\nwith referer → ${r.withReferer}"
+                        },
+                        color = Color(0xFFB0B0B0),
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(Modifier.height(14.dp))
+                }
             }
         }
 

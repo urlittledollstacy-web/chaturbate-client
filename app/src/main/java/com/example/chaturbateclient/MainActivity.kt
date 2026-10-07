@@ -60,10 +60,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import com.example.chaturbateclient.data.ApiRoom
 import com.example.chaturbateclient.data.AppPreferences
-import com.example.chaturbateclient.data.ChaturbateApi
 import com.example.chaturbateclient.data.JsonRoomCacheStore
 import com.example.chaturbateclient.data.filterRooms
 import com.example.chaturbateclient.data.normalizedImageUrl
@@ -72,10 +73,7 @@ import com.example.chaturbateclient.ui.ClientTheme
 import com.example.chaturbateclient.ui.LocalAppColors
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 
 class MainActivity : ComponentActivity() {
@@ -113,46 +111,17 @@ private fun ClientContent(
     var selectedRoom by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val cacheStore = remember(context) { JsonRoomCacheStore(context) }
+    val homeViewModel: HomeViewModel = viewModel { HomeViewModel(cacheStore) }
+    val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
 
     var favorites by remember { mutableStateOf(preferences.loadFavorites()) }
     var autoPlay by remember { mutableStateOf(preferences.autoPlay) }
     var dataSaver by remember { mutableStateOf(preferences.dataSaver) }
     var preferredQuality by remember { mutableStateOf(preferences.preferredQuality) }
     var videoResizeMode by remember { mutableStateOf(preferences.videoResizeMode) }
-    var rooms by remember { mutableStateOf<List<ApiRoom>>(emptyList()) }
-    var loadingRooms by remember { mutableStateOf(false) }
-    var roomError by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableStateOf(0) }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-
-    // Loads once at startup and on explicit refresh (pull-to-refresh or tapping Home while on Home).
-    // Switching tabs does not reload.
-    LaunchedEffect(refreshNonce) {
-        // Cache reads/writes happen off the main thread.
-        val cached = withContext(Dispatchers.IO) { cacheStore.load() }
-        if (cached.isNotEmpty()) rooms = cached
-        // Always flag loading so a refresh (not just the first load) shows its indicator.
-        loadingRooms = true
-        roomError = null
-
-        // Best-effort refresh; never let a smaller/empty result replace a larger good cache.
-        runCatching {
-            withContext(Dispatchers.IO) { ChaturbateApi.fetchAllOnlineRooms() }
-        }.onSuccess { fresh ->
-            if (fresh.isNotEmpty()) {
-                withContext(Dispatchers.IO) { cacheStore.save(fresh) }
-                rooms = fresh
-            } else if (rooms.isEmpty()) {
-                roomError = "No live rooms returned."
-            }
-            loadingRooms = false
-        }.onFailure {
-            if (it is CancellationException) throw it
-            if (rooms.isEmpty()) roomError = it.message ?: "Unable to load live rooms."
-            loadingRooms = false
-        }
-    }
 
     // A refresh should also return the feed to the top.
     LaunchedEffect(refreshNonce) {
@@ -201,14 +170,14 @@ private fun ClientContent(
     ) { padding ->
         when (selectedTab) {
             0 -> HomeScreen(
-                rooms = rooms,
+                rooms = homeState.rooms,
                 query = query,
-                loading = loadingRooms,
-                error = roomError,
+                loading = homeState.loading,
+                error = homeState.error,
                 onQueryChange = { query = it },
                 modifier = Modifier.padding(padding),
                 onRoomClick = { selectedRoom = it.username },
-                onRetry = { refreshNonce++ },
+                onRetry = { refreshNonce++; homeViewModel.refresh() },
                 gridState = gridState
             )
             1 -> FavoritesScreen(

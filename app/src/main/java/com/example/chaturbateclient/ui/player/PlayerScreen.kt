@@ -197,7 +197,8 @@ fun PlayerScreen(
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
             controller.show(WindowInsetsCompat.Type.systemBars())
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Exiting fullscreen returns to portrait; the inline player stays portrait.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
         onDispose {
             controller.show(WindowInsetsCompat.Type.systemBars())
@@ -209,8 +210,26 @@ fun PlayerScreen(
 
     if (fullscreen) {
         AndroidView(
-            factory = { PlayerView(it).apply { useController = true; this.player = player; resizeMode = resizeModeFor(resize) } },
-            update = { it.resizeMode = resizeModeFor(resize) },
+            factory = {
+                PlayerView(it).apply {
+                    useController = true
+                    controllerAutoShow = true
+                    controllerHideOnTouch = true
+                    this.player = player
+                    resizeMode = resizeModeFor(resize)
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    // Show the library's own fullscreen toggle as an exit control,
+                    // so there is a visible way back to portrait.
+                    setFullscreenButtonState(true)
+                    setFullscreenButtonClickListener { isFullscreen ->
+                        if (!isFullscreen) fullscreen = false
+                    }
+                }
+            },
+            update = {
+                it.resizeMode = resizeModeFor(resize)
+                it.setFullscreenButtonState(true)
+            },
             modifier = modifier.fillMaxSize().background(Color.Black)
         )
         return

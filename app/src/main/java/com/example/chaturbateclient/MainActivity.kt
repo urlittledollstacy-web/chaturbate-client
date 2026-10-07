@@ -157,6 +157,7 @@ private fun ClientApp() {
             dataSaver = dataSaver,
             preferredQuality = preferredQuality,
             videoResizeMode = videoResizeMode,
+            onVideoResizeModeChange = { videoResizeMode = it; preferences.videoResizeMode = it },
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -195,8 +196,6 @@ private fun ClientApp() {
                 onDataSaverChange = { dataSaver = it; preferences.dataSaver = it },
                 preferredQuality = preferredQuality,
                 onPreferredQualityChange = { preferredQuality = it; preferences.preferredQuality = it },
-                resizeMode = videoResizeMode,
-                onResizeModeChange = { videoResizeMode = it; preferences.videoResizeMode = it },
                 modifier = Modifier.padding(padding)
             )
         }

@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -66,6 +68,9 @@ private fun resizeModeFor(mode: VideoResizeMode): Int = when (mode) {
     VideoResizeMode.Stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
 }
 
+// Matches the app's accent so the resize control reads as a distinct, tappable control.
+private val PlayerAccent = Color(0xFFD8B4FE)
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -77,12 +82,14 @@ fun PlayerScreen(
     dataSaver: Boolean,
     preferredQuality: String,
     videoResizeMode: String,
+    onVideoResizeModeChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showResizeMenu by remember { mutableStateOf(false) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var quality by remember {
         mutableStateOf(VideoQuality.entries.firstOrNull { it.label == preferredQuality } ?: VideoQuality.Auto)
@@ -255,6 +262,38 @@ fun PlayerScreen(
                                 DropdownMenuItem(
                                     text = { Text(item.label + if (dataSaver && item.maxHeight != null && item.maxHeight > 480) " (capped)" else "") },
                                     onClick = { quality = item; showQualityMenu = false }
+                                )
+                            }
+                        }
+                    }
+                    Box {
+                        // Accent-tinted so it reads as a distinct control, not another row in the gear menu.
+                        IconButton(
+                            onClick = { showResizeMenu = true },
+                            modifier = Modifier.background(PlayerAccent.copy(alpha = 0.18f), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Outlined.AspectRatio,
+                                contentDescription = "Video resize",
+                                tint = PlayerAccent
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showResizeMenu,
+                            onDismissRequest = { showResizeMenu = false }
+                        ) {
+                            VideoResizeMode.entries.forEach { item ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            item.label + if (item.label == resize.label) "  ✓" else "",
+                                            color = if (item.label == resize.label) PlayerAccent else Color.Unspecified
+                                        )
+                                    },
+                                    onClick = {
+                                        onVideoResizeModeChange(item.label)
+                                        showResizeMenu = false
+                                    }
                                 )
                             }
                         }

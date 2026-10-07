@@ -57,6 +57,7 @@ import com.example.chaturbateclient.data.JsonRoomCacheStore
 import com.example.chaturbateclient.data.filterRooms
 import com.example.chaturbateclient.ui.SettingsScreen
 import com.example.chaturbateclient.ui.player.PlayerScreen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -130,6 +131,7 @@ private fun ClientApp() {
             }
             loadingRooms = false
         }.onFailure {
+            if (it is CancellationException) throw it
             if (rooms.isEmpty()) roomError = it.message ?: "Unable to load live rooms."
             loadingRooms = false
         }
@@ -206,7 +208,7 @@ private fun HomeScreen(
     onRetry: () -> Unit
 ) {
     val normalizedQuery = query.trim()
-    val filtered = filterRooms(rooms, normalizedQuery)
+    val filtered = remember(rooms, normalizedQuery) { filterRooms(rooms, normalizedQuery) }
 
     Column(modifier = modifier.fillMaxSize().background(OledBlack).padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(16.dp))

@@ -8,3 +8,6 @@ captures/
 .externalNativeBuild/
 .cxx/
 .kotlin/
+
+# Agent scratch artifacts (patches, notes)
+.agent_tmp/
